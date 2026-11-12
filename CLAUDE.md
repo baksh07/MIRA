@@ -86,6 +86,8 @@ Installed versions (verified 2026-11-12): Next.js 16.4.6 (Turbopack), React 19.3
 | Pydantic | Validation and data models |
 | WebSockets | Real-time communication where required |
 
+Backend tooling: Python 3.12 managed with **uv** (`pyproject.toml` + `uv.lock`, no `requirements.txt`). Package `mira_backend` lives in `backend/src/`. Run `uv sync`, `uv run pytest`, `uv run uvicorn mira_backend.main:app --reload` from `backend/`.
+
 ## 2.3 Voice Infrastructure
 
 | Technology | Responsibility |
@@ -637,8 +639,8 @@ MIRA/
 │   ├── package.json
 │   └── tsconfig.json
 │
-├── backend/
-│   ├── app/
+├── backend/                  # uv project, src layout
+│   ├── src/mira_backend/
 │   │   ├── api/
 │   │   ├── core/
 │   │   ├── models/
@@ -646,7 +648,8 @@ MIRA/
 │   │   └── main.py
 │   │
 │   ├── tests/
-│   ├── requirements.txt
+│   ├── pyproject.toml
+│   ├── uv.lock
 │   └── README.md
 │
 ├── mcp-servers/
@@ -957,6 +960,15 @@ npm run build      # production build
 npm run dev        # dev server (http://localhost:3000)
 ```
 
+### Backend verification commands
+
+Run from `backend/`:
+
+```bash
+uv run pytest                                   # tests
+uv run uvicorn mira_backend.main:app --reload   # API (http://127.0.0.1:8000)
+```
+
 ---
 
 # 11. Security and Privacy Requirements
@@ -1219,9 +1231,12 @@ This section should be updated as development progresses.
   - `next dev` serves `/` with HTTP 200.
   - Tailwind CSS v4 utilities are generated (checked in served CSS).
 
+- `frontend/` scaffold committed and pushed on `feature/project-initialization` (2885c3c).
+- Backend foundation started early on `feature/backend-foundation` (branched from `feature/project-initialization`): uv project, FastAPI app with `GET /health`, pytest tests.
+
 ## Pending
 
-- Commit the `frontend/` scaffold (currently untracked).
+- Merge `feature/project-initialization` into `dev` before `feature/backend-foundation`.
 - Build the initial application shell (replace create-next-app placeholder page and metadata).
 - Visual check of the app in a browser.
 
