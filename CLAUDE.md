@@ -77,7 +77,9 @@ Additional frontend libraries may be introduced when justified.
 
 Installed versions (verified 2026-11-12): Next.js 16.4.6 (Turbopack), React 19.3.0, Tailwind CSS 4.3.3 (via the `@tailwindcss/turbopack` loader in `next.config.ts`, no PostCSS config), TypeScript 5 strict, ESLint 9 flat config. This Next.js version differs from older training data — read `frontend/node_modules/next/dist/docs/` before using unfamiliar APIs (see `frontend/AGENTS.md`).
 
-3D work: before writing any three.js / React Three Fiber / drei code, load the installed `threejs-*` skills (from CloudAI-X/threejs-skills) — at minimum `threejs-react-three-fiber`, `threejs-loaders` and `threejs-shaders`, plus others relevant to the task. They target three r186, R3F 9.8 and drei 10.7; pin dependencies accordingly.
+3D work: before writing any three.js / React Three Fiber / drei code, load the installed `threejs-*` skills (from CloudAI-X/threejs-skills) — at minimum `threejs-react-three-fiber`, `threejs-loaders` and `threejs-shaders`, plus others relevant to the task. They target three r186, R3F 9.8 and drei 10.7; pinned exactly as three 0.186.1, @react-three/fiber 9.8.2, @react-three/drei 10.7.9.
+
+3D car model pipeline: the source download ("BMW M2 g87 [Free]" by Black Snow, CC BY 4.0) lives in `frontend/assets-src/m2-g87-source.glb` (git-ignored). `npm run build:model` (`frontend/scripts/build-car-model.mjs`, gltf-transform SDK) removes manufacturer branding, drops hidden drivetrain parts, converts textures to WebP and meshopt-compresses geometry into `frontend/public/models/coupe.glb` (~6 MB, ~251k triangles). Doors (`*_door_L/R`, `*_doorpanel_*`, `*_doorglass_*`), hood, trunk, the four wheels and the steering wheel stay separate nodes for Phase 3. Interior textures still contain small brand marks (dash screen, seat headrest, shifter, light internals) — clean them up when the cockpit is built. The attribution is required by the license and lives in the footer and README.
 
 Frontend design tokens live in `frontend/src/app/globals.css` (`@theme`): `wall`, `floor`, `concrete`, `halogen`, `brushed`, `ambient`. `ambient` is the car's ambient-lighting colour and the only accent; it will later be driven by vehicle state. Typeface: Archivo (variable, `wdth` axis) — the MIRA wordmark uses `[font-stretch:125%]`.
 
@@ -1075,11 +1077,11 @@ docs: document system architecture
 test: add vehicle simulator tests
 ```
 
-Claude must not commit, push, merge, or delete branches without the user's explicit approval.
+Claude manages day-to-day git: pulling, creating feature branches, committing verified work, and pushing (always as `git push origin <branch>`).
 
-The user runs all commits and pushes personally. When work is verified and ready, Claude says so, lists the files to stage, suggests a commit message, and states which branch to push to (written in the command, e.g. `git push origin <branch>`). Claude does not run the git commands.
+Commits use the repository's configured git identity, so they are authored by the user. Commit messages and PR descriptions must not contain any Claude/Anthropic attribution (no `Co-Authored-By: Claude …` trailer, no "Generated with Claude Code" line). All work is credited to the user.
 
-Suggested commit messages and PR descriptions must not contain any Claude/Anthropic attribution (no `Co-Authored-By: Claude …` trailer, no "Generated with Claude Code" line). All commits are authored and credited to the user.
+Claude still asks before force-pushing, deleting branches, rewriting history, or merging into `dev`/`main`.
 
 ---
 
@@ -1240,23 +1242,23 @@ This section should be updated as development progresses.
 - `frontend/` scaffold committed and pushed on `feature/project-initialization` (2885c3c).
 - Backend foundation started early on `feature/backend-foundation` (branched from `feature/project-initialization`): uv project, FastAPI app with `GET /health`, pytest tests.
 
+- Phase 1 merged into `dev` (PRs #1 project initialization, #2 backend foundation, #3 app shell).
+- Phase 2 (3D virtual garage) built on `feature/3d-garage` (2026-11-13): full-bleed R3F scene behind the page chrome (lazy-loaded, `ssr: false`, error boundary, loading progress), debranded M2 model on a reflective studio floor with fog, softbox environment reflections, contact shadow, overhead spotlight with switch-on flicker, orbit controls (no pan, limited polar/zoom, slow auto-rotate off under reduced motion), responsive framing. Verified 2026-11-13: `tsc`, lint, build pass; rendered with no console errors at 390×844, 1024×768, 1440×900, 1920×1080; drag-to-orbit works.
+
 ## Pending
 
-- Merge `feature/project-initialization` into `dev` before `feature/backend-foundation`.
-- Initial application shell built on `feature/app-shell` (2026-11-13): header (wordmark, driver status), garage stage with spotlight turntable placeholder, disclaimer footer. Verified at 1440×900 and 390×844, no console errors.
-- Visual check of the app in a browser.
+- Open PR `feature/3d-garage` → `dev`.
+- Phase 3: door hotspots and opening (hinge pivots computed from door bounds), garage-to-cockpit camera transition, cockpit/dashboard UI.
 
 ## Current Git Branch
 
 ```text
-feature/project-initialization
+feature/3d-garage
 ```
 
 ## Next Immediate Milestone
 
-Build the initial MIRA application shell, then commit and merge Phase 1 into `dev`.
-
-Do not begin 3D implementation until the basic Next.js application is working correctly.
+Merge Phase 2 into `dev`, then start Phase 3 (vehicle interaction and cockpit) on `feature/vehicle-interaction`.
 
 ---
 
