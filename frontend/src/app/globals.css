@@ -1,26 +1,58 @@
 @import "tailwindcss";
 
+/*
+ * MIRA design tokens.
+ * The showroom is lit, not flat black: a wall tone that falls off to a darker floor.
+ * `ambient` is the car's ambient-lighting colour. It is the only accent, and it will
+ * later be driven by the authoritative vehicle state rather than hard-coded.
+ */
+@theme {
+  --color-wall: #1b1e23;
+  --color-floor: #121418;
+  --color-concrete: #2b2f36;
+  --color-halogen: #eef0f2;
+  --color-brushed: #959ba5;
+  --color-ambient: #5aa9ff;
+
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-floor);
+  color: var(--color-halogen);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ambient);
+  outline-offset: 3px;
+}
+
+/* The one orchestrated moment: the showroom spotlight switches on. */
+@keyframes spotlight-on {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.55;
+  }
+  45% {
+    opacity: 0.2;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.animate-spotlight-on {
+  animation: spotlight-on 1.4s ease-out 0.2s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-spotlight-on {
+    animation: none;
+  }
 }

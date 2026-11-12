@@ -15,6 +15,9 @@ htmlcov/
 *.egg-info/
 dist/
 
+# Browser-test artifacts (Playwright MCP screenshots, logs)
+.playwright-mcp/
+
 # Editors / OS
 .vscode/
 .idea/

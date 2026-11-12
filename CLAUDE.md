@@ -77,6 +77,10 @@ Additional frontend libraries may be introduced when justified.
 
 Installed versions (verified 2026-11-12): Next.js 16.4.6 (Turbopack), React 19.3.0, Tailwind CSS 4.3.3 (via the `@tailwindcss/turbopack` loader in `next.config.ts`, no PostCSS config), TypeScript 5 strict, ESLint 9 flat config. This Next.js version differs from older training data — read `frontend/node_modules/next/dist/docs/` before using unfamiliar APIs (see `frontend/AGENTS.md`).
 
+3D work: before writing any three.js / React Three Fiber / drei code, load the installed `threejs-*` skills (from CloudAI-X/threejs-skills) — at minimum `threejs-react-three-fiber`, `threejs-loaders` and `threejs-shaders`, plus others relevant to the task. They target three r186, R3F 9.8 and drei 10.7; pin dependencies accordingly.
+
+Frontend design tokens live in `frontend/src/app/globals.css` (`@theme`): `wall`, `floor`, `concrete`, `halogen`, `brushed`, `ambient`. `ambient` is the car's ambient-lighting colour and the only accent; it will later be driven by vehicle state. Typeface: Archivo (variable, `wdth` axis) — the MIRA wordmark uses `[font-stretch:125%]`.
+
 ## 2.2 Backend
 
 | Technology | Responsibility |
@@ -1075,6 +1079,8 @@ Claude must not commit, push, merge, or delete branches without the user's expli
 
 The user runs all commits and pushes personally. When work is verified and ready, Claude says so, lists the files to stage, suggests a commit message, and states which branch to push to (written in the command, e.g. `git push origin <branch>`). Claude does not run the git commands.
 
+Suggested commit messages and PR descriptions must not contain any Claude/Anthropic attribution (no `Co-Authored-By: Claude …` trailer, no "Generated with Claude Code" line). All commits are authored and credited to the user.
+
 ---
 
 # 13. Instructions for Claude Code
@@ -1237,7 +1243,7 @@ This section should be updated as development progresses.
 ## Pending
 
 - Merge `feature/project-initialization` into `dev` before `feature/backend-foundation`.
-- Build the initial application shell (replace create-next-app placeholder page and metadata).
+- Initial application shell built on `feature/app-shell` (2026-11-13): header (wordmark, driver status), garage stage with spotlight turntable placeholder, disclaimer footer. Verified at 1440×900 and 390×844, no console errors.
 - Visual check of the app in a browser.
 
 ## Current Git Branch
