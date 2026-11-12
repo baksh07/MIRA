@@ -8,6 +8,13 @@ memory-informed automotive voice assistants.
 
 Under active development.
 
+## Credits
+
+- 3D car model: ["BMW M2 g87 [Free]"](https://sketchfab.com/3d-models/bmw-m2-g87-free-125412579b244790b27b2a7839527c6e)
+  by Black Snow, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+  Modified for MIRA: manufacturer badges removed, hidden drivetrain parts dropped,
+  geometry and textures compressed (`frontend/scripts/build-car-model.mjs`).
+
 ## Disclaimer
 
 MIRA is an independent project. It is not affiliated with,
