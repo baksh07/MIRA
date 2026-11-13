@@ -1,5 +1,6 @@
 import { GARAGE_COPY_ID } from "./carFraming";
 import { ExteriorOnly } from "./ExteriorOnly";
+import { WrapPicker } from "./WrapPicker";
 
 /**
  * The copy laid over the 3D garage. The car itself renders in GarageScene,
@@ -29,6 +30,7 @@ export function GarageStage() {
         <p className="mt-6 text-sm text-brushed">
           Drag to walk around the car. Open a door, then get in.
         </p>
+        <WrapPicker />
       </ExteriorOnly>
     </section>
   );

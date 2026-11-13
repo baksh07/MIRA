@@ -13,6 +13,7 @@ from pydantic import Field
 
 from mira_backend.models.vehicle import (
     ApplyScene,
+    SetPaint,
     Refuel,
     SceneName,
     StartTrip,
@@ -150,3 +151,13 @@ async def apply_cabin_scene(vehicle_id: VehicleId, scene: SceneName) -> dict:
     """Set a whole cabin mood at once: relax (tired, stressed), focus (work, calls), sport (fun, energetic),
     night (late, dark), cozy (cold, rainy). Changes climate, lighting, music and drive mode together."""
     return await _apply(vehicle_id, ApplyScene(scene=scene))
+
+
+@mcp.tool
+async def set_paint_color(
+    vehicle_id: VehicleId,
+    color: Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$", description="Colour as #RRGGBB")],
+) -> dict:
+    """Change the car's exterior wrap colour in the showroom (only while parked). e.g. red #D90012, blue #1F4FD8,
+    white #E8E8E8, black #111111, racing green #0B3D2E, yellow #F2C200, silver #9AA0A6."""
+    return await _apply(vehicle_id, SetPaint(color=color))

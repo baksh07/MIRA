@@ -1,4 +1,4 @@
-import { Box3, Group, type Object3D, Vector3 } from "three";
+import { Box3, Group, type Material, type Mesh, type MeshStandardMaterial, type Object3D, Vector3 } from "three";
 import type { DoorSide } from "@/stores/garageStore";
 
 export interface DoorRig {
@@ -26,6 +26,8 @@ export interface CarRig {
   seat: SeatPose;
   /** Rims and tyres; each is centred on its hub, so it spins about its local x axis. */
   wheels: Object3D[];
+  /** The body paint (a flat colour with clear-coat), recoloured live from the vehicle state. */
+  paint: MeshStandardMaterial | null;
 }
 
 const DOOR_OPEN_ANGLE = 1.1; // ~63°
@@ -97,7 +99,12 @@ export function rigCar(scene: Object3D): CarRig {
 
   scene.updateMatrixWorld(true);
   const doors = { left: rigDoor(scene, "left"), right: rigDoor(scene, "right") };
-  const rig: CarRig = { doors, seat: seatPose(scene, doors.left), wheels: find(scene, WHEEL_PARTS) };
+  let paint: MeshStandardMaterial | null = null;
+  scene.traverse((object) => {
+    const material = (object as Mesh).material as Material | undefined;
+    if (!paint && material && "color" in material && material.name.endsWith("_Paint")) paint = material as MeshStandardMaterial;
+  });
+  const rig: CarRig = { doors, seat: seatPose(scene, doors.left), wheels: find(scene, WHEEL_PARTS), paint };
   scene.userData.rig = rig;
   return rig;
 }
