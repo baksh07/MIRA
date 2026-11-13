@@ -100,3 +100,21 @@ session_messages; RLS on, no browser access). Apply with `uv run python scripts/
 
 Personal data is only reachable through the session bound to the caller's car, so a
 client can never read another driver's memories.
+
+## Agent and memory (Phase 8)
+
+`agent/graph.py` is a LangGraph loop (model ⇄ tools, max 4 model calls per turn) built
+per request around the caller's car and driver.
+
+- **Models** (`agent/llm.py`): `GROQ_MODELS` in order (each has its own free quota), then
+  `OPENAI_MODEL`. Any error, including 429 rate limits, falls through immediately.
+- **Tools** (`agent/tools.py`): the vehicle tools are generated from the MCP server's schemas
+  and called through an MCP client; `vehicle_id` is hidden from the model and filled in
+  server-side. `remember` and `save_preference` write to the current driver only, after
+  validation and the memory policy (lasting facts only; sensitive data refused; 50 max).
+- **Context**: compact car summary, the driver's preferences and recent memories.
+  Explicit instructions win over remembered preferences.
+- `POST /api/assistant/chat` `{vehicle_id, message}` → `{reply, actions, memories, model}`.
+
+Local dev server on Windows: `uv run python -m mira_backend.devserver` (selects the event
+loop psycopg needs on Windows).
