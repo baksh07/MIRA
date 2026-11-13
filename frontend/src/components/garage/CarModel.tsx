@@ -5,7 +5,8 @@ import { useFrame } from "@react-three/fiber";
 import { useMemo } from "react";
 import { Box3, MathUtils, type Object3D, Vector3 } from "three";
 import { type CarRig, rigCar } from "@/components/vehicle/carRig";
-import { type DoorSide, useGarageStore } from "@/stores/garageStore";
+import type { DoorSide } from "@/stores/garageStore";
+import { useVehicleStore } from "@/stores/vehicleStore";
 import { CarHotspots } from "./CarHotspots";
 
 /**
@@ -43,7 +44,7 @@ export function useCar(): Car {
   return useMemo(() => prepareCar(scene), [scene]);
 }
 
-/** Swings each door towards its open/closed target. */
+/** Swings each door towards the open/closed state the vehicle simulator confirmed. */
 function swingDoors(rig: CarRig, open: Record<DoorSide, boolean>, delta: number, instant: boolean) {
   for (const side of ["left", "right"] as const) {
     const { pivot, openAngle } = rig.doors[side];
@@ -53,7 +54,10 @@ function swingDoors(rig: CarRig, open: Record<DoorSide, boolean>, delta: number,
 }
 
 function DoorAnimator({ rig, instant }: { rig: CarRig; instant: boolean }) {
-  useFrame((_, delta) => swingDoors(rig, useGarageStore.getState().doors, delta, instant));
+  useFrame((_, delta) => {
+    const doors = useVehicleStore.getState().state?.doors;
+    swingDoors(rig, { left: doors?.left_open ?? false, right: doors?.right_open ?? false }, delta, instant);
+  });
   return null;
 }
 

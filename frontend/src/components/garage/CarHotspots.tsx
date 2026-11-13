@@ -2,10 +2,11 @@
 
 import { Html } from "@react-three/drei";
 import { createPortal, useFrame } from "@react-three/fiber";
-import { Fragment, useRef } from "react";
+import { Fragment, useRef, useState } from "react";
 import type { Vector3 } from "three";
 import type { CarRig } from "@/components/vehicle/carRig";
 import { DRIVER_SIDE, type DoorSide, useGarageStore } from "@/stores/garageStore";
+import { useVehicleStore } from "@/stores/vehicleStore";
 
 /**
  * How far (m) to the side of the car the camera must be before that side's
@@ -81,12 +82,28 @@ function Hotspot({ position, side, label, labelSide = "right", isAvailable, onPr
 
 /** Door hotspots (riding on each door) and the get-in hotspot in the driver's doorway. */
 export function CarHotspots({ rig }: { rig: CarRig }) {
-  const doors = useGarageStore((state) => state.doors);
-  const toggleDoor = useGarageStore((state) => state.toggleDoor);
+  // Doors are vehicle signals: the hotspot asks the simulator, and the door moves
+  // only once the confirmed state comes back.
+  const doors = useVehicleStore((state) => state.state?.doors);
+  const send = useVehicleStore((state) => state.send);
   const enterCockpit = useGarageStore((state) => state.enterCockpit);
+  const [pending, setPending] = useState<DoorSide | null>(null);
 
-  const inGarage = () => useGarageStore.getState().view === "exterior";
-  const driverDoorOpen = () => inGarage() && useGarageStore.getState().doors[DRIVER_SIDE];
+  const isOpen = (side: DoorSide) => (side === "left" ? doors?.left_open : doors?.right_open) ?? false;
+  const toggleDoor = async (side: DoorSide) => {
+    useGarageStore.getState().markInteracted();
+    setPending(side);
+    try {
+      await send({ type: "set_door", door: side, open: !isOpen(side) });
+    } catch (error) {
+      console.warn("Door command failed", error);
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const inGarage = () => useGarageStore.getState().view === "exterior" && useVehicleStore.getState().state !== null;
+  const driverDoorOpen = () => inGarage() && (useVehicleStore.getState().state?.doors.left_open ?? false);
 
   return (
     <>
@@ -99,7 +116,7 @@ export function CarHotspots({ rig }: { rig: CarRig }) {
               <Hotspot
                 side={side}
                 position={handle.clone().sub(pivot.position)}
-                label={doors[side] ? "Close door" : "Open door"}
+                label={pending === side ? "…" : isOpen(side) ? "Close door" : "Open door"}
                 isAvailable={inGarage}
                 onPress={() => toggleDoor(side)}
               />,
