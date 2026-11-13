@@ -14,7 +14,7 @@ export interface ChatTurn {
   offer?: HabitOffer;
 }
 
-export type AssistantStatus = "idle" | "listening" | "thinking" | "speaking" | "error";
+export type AssistantStatus = "idle" | "standby" | "listening" | "thinking" | "speaking" | "error";
 
 interface ChatResponse {
   reply: string;

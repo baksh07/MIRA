@@ -7,8 +7,9 @@
 import { WS_URL } from "./api";
 
 export type VoiceEvent =
-  | { type: "status"; status: "idle" | "thinking" | "speaking" }
+  | { type: "status"; status: "idle" | "thinking" | "speaking" | "listening"; seconds?: number }
   | { type: "interim"; text: string }
+  | { type: "standby"; text: string }
   | { type: "user"; text: string }
   | { type: "assistant"; text: string; actions: string[]; memories: string[] }
   | { type: "interrupt" }
