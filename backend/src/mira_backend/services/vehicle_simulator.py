@@ -125,6 +125,8 @@ class VehicleSimulator:
                     state.music.playing = action == "play"
                 if volume is not None:
                     state.music.volume = volume
+                if action is None:
+                    return f"Music volume set to {volume}"
                 status = "Playing" if state.music.playing else "Paused"
                 return f"{status} “{state.music.track}” at volume {state.music.volume}"
             case SetDestination(destination=destination):

@@ -83,3 +83,20 @@ Commands: `set_temperature`, `set_fan_speed`, `set_seat_heating`, `set_ambient_l
 `set_ambient_lighting`, `set_driving_mode`, `control_music`, `set_navigation_destination`,
 `cancel_navigation`, `set_window`, `set_door`. Each takes the session's `vehicle_id`.
 The agent calls them in-process through a FastMCP client and fills in `vehicle_id` itself.
+
+## Drivers and memory (Phase 4)
+
+Schema: `supabase/migrations/` (drivers, driver_preferences, memories, sessions,
+session_messages; RLS on, no browser access). Apply with `uv run python scripts/migrate.py`
+(idempotent; also runs `supabase/seed.sql` with the two demo drivers, Daniel and Sophia).
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/drivers` | Demo drivers (no personal data) |
+| `POST /api/sessions` | `{vehicle_id, driver_id}`: identify the driver in this car and apply their preferences |
+| `GET /api/sessions/{vehicle_id}` | Driver currently in this car |
+| `GET /api/sessions/{vehicle_id}/profile` | That driver's preferences and memories |
+| `DELETE /api/sessions/{vehicle_id}/memories/{id}` | Forget one memory (scoped to that driver) |
+
+Personal data is only reachable through the session bound to the caller's car, so a
+client can never read another driver's memories.
