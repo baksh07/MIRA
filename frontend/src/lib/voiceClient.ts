@@ -73,6 +73,8 @@ export async function startVoice(
 
   // Gapless playback of streamed speech; cancellable for barge-in.
   let playhead = 0;
+  // After a barge-in, drop speech still in flight until MIRA's next reply.
+  let muted = false;
   const playing = new Set<AudioBufferSourceNode>();
   const stopPlayback = () => {
     for (const node of playing) node.stop();
@@ -101,11 +103,15 @@ export async function startVoice(
 
   socket.onmessage = (message) => {
     if (message.data instanceof ArrayBuffer) {
-      play(message.data);
+      if (!muted) play(message.data);
       return;
     }
     const event = JSON.parse(message.data as string) as VoiceEvent;
-    if (event.type === "interrupt") stopPlayback();
+    if (event.type === "interrupt") {
+      muted = true;
+      stopPlayback();
+    }
+    if (event.type === "assistant") muted = false;
     onEvent(event);
   };
   socket.onclose = (close) => {
