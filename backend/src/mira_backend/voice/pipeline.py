@@ -1,6 +1,6 @@
 """MIRA's voice pipeline (Pipecat).
 
-    browser mic ─PCM16─▶ WebSocket ─▶ Deepgram STT ─▶ MiraBrain ─▶ Deepgram TTS ─▶ WebSocket ─PCM16─▶ speaker
+    browser mic ─PCM16─▶ WebSocket ─▶ Deepgram STT ─▶ MiraBrain ─▶ ElevenLabs TTS ─▶ WebSocket ─PCM16─▶ speaker
                                                           │
                                                  converse() = the LangGraph agent
 
@@ -43,13 +43,14 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.serializers.base_serializer import FrameSerializer
 from pipecat.services.deepgram.stt import DeepgramSTTService, LiveOptions
 from pipecat.services.deepgram.tts import DeepgramTTSService
+from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
 from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
 )
 
 from mira_backend.api.assistant import converse
-from mira_backend.core.config import get_settings
+from mira_backend.core.config import Settings, get_settings
 from mira_backend.models.vehicle import VehicleState
 from mira_backend.services.briefing import briefing
 from mira_backend.services.container import container
@@ -64,6 +65,19 @@ OUT_RATE = 24_000
 # Deepgram may split one request into several final segments; how long to wait
 # for more depends on whether the driver sounds finished (see voice.wake.turn_gap).
 gap_for = turn_gap
+
+
+def make_tts(settings: Settings) -> ElevenLabsTTSService | DeepgramTTSService:
+    """MIRA's voice: ElevenLabs if configured, otherwise Deepgram Aura."""
+    if settings.tts_provider == "elevenlabs" and settings.elevenlabs_api_key:
+        return ElevenLabsTTSService(
+            api_key=settings.elevenlabs_api_key,
+            sample_rate=OUT_RATE,
+            settings=ElevenLabsTTSService.Settings(
+                voice=settings.elevenlabs_voice_id, model=settings.elevenlabs_model, stability=0.5, similarity_boost=0.75
+            ),
+        )
+    return DeepgramTTSService(api_key=settings.deepgram_api_key, voice=settings.deepgram_tts_voice, sample_rate=OUT_RATE)
 
 
 class MiraWireSerializer(FrameSerializer):
@@ -200,20 +214,20 @@ class MiraBrain(FrameProcessor):
 
 # Said while tools run, so the driver hears MIRA working instead of silence.
 _WORKING = {
-    "set_cabin_temperature": "Adjusting the temperature for you, {name}. One moment.",
-    "set_seat_heating": "Getting your seat warmed up.",
+    "set_cabin_temperature": "Mm-hmm, adjusting the temperature for you, {name}. Just a moment.",
+    "set_seat_heating": "Okay, getting your seat warmed up.",
     "set_fan_speed": "Adjusting the fan.",
-    "set_ambient_lighting": "Changing the lights for you.",
-    "apply_cabin_scene": "Setting the mood in here, just a second.",
-    "set_navigation_destination": "Let me plan the route, {name}.",
+    "set_ambient_lighting": "Ooh, okay, changing the lights for you.",
+    "apply_cabin_scene": "Hmm, let me set the mood in here, just a second.",
+    "set_navigation_destination": "Alright, let me plan the route, {name}.",
     "start_drive": "Here we go.",
     "leave_garage": "Opening the garage door.",
     "stop_drive": "Pulling over.",
-    "control_music": "Let me sort the music.",
+    "control_music": "Okay, let me sort the music.",
     "set_driving_mode": "Switching the drive mode.",
-    "get_vehicle_status": "Let me check the car, {name}.",
-    "remember": "Noted.",
-    "save_preference": "I'll remember that.",
+    "get_vehicle_status": "Hmm, let me check the car, {name}.",
+    "remember": "Mm-hmm, noted.",
+    "save_preference": "Ah, I'll remember that.",
 }
 
 
@@ -273,7 +287,7 @@ async def run_voice_session(websocket: WebSocket, vehicle_id: UUID) -> None:
             keyterm=["MIRA"],  # boost her name so the wake word is heard reliably
         ),
     )
-    tts = DeepgramTTSService(api_key=settings.deepgram_api_key, voice=settings.deepgram_tts_voice, sample_rate=OUT_RATE)
+    tts = make_tts(settings)
     brain = MiraBrain(vehicle_id)
     pipeline = Pipeline([transport.input(), stt, brain, tts, transport.output()])
     task = PipelineTask(

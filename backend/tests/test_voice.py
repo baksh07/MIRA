@@ -155,8 +155,8 @@ def test_turn_gap_waits_when_the_driver_trails_off() -> None:
 def test_working_phrase_is_personal_and_tool_specific() -> None:
     from mira_backend.voice.pipeline import working_phrase
 
-    assert working_phrase(["set_cabin_temperature"], "Dan") == "Adjusting the temperature for you, Dan. One moment."
-    assert working_phrase(["get_vehicle_status"], None) == "Let me check the car."
+    assert working_phrase(["set_cabin_temperature"], "Dan") == "Mm-hmm, adjusting the temperature for you, Dan. Just a moment."
+    assert working_phrase(["get_vehicle_status"], None) == "Hmm, let me check the car."
     assert working_phrase(["unknown_tool"], "Dan") == "One moment."
 
 
@@ -173,3 +173,15 @@ def test_greeting_for_new_and_returning_drivers() -> None:
     assert back.startswith("Good afternoon, Dan. Welcome back") and back.endswith("Just say MIRA whenever you need me.")
     assert preferred_name("Daniel", ["Enjoys jazz.", "Prefers to be called Danny."]) == "Danny"
     assert preferred_name("Daniel", []) == "Daniel"
+
+
+def test_tts_uses_elevenlabs_when_configured_and_falls_back_to_deepgram() -> None:
+    from pipecat.services.deepgram.tts import DeepgramTTSService
+    from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
+
+    from mira_backend.core.config import Settings
+    from mira_backend.voice.pipeline import make_tts
+
+    assert isinstance(make_tts(Settings(elevenlabs_api_key="test", deepgram_api_key="dg")), ElevenLabsTTSService)
+    assert isinstance(make_tts(Settings(elevenlabs_api_key="", deepgram_api_key="dg")), DeepgramTTSService)
+    assert isinstance(make_tts(Settings(elevenlabs_api_key="test", tts_provider="deepgram", deepgram_api_key="dg")), DeepgramTTSService)
