@@ -7,9 +7,9 @@ answer her without repeating the name, which keeps the conversation natural.
 
 import re
 
-FOLLOW_UP_SECONDS = 8.0
+FOLLOW_UP_SECONDS = 12.0
 
-_WAKE = re.compile(r"\b(?:(?:hey|hi|ok|okay|hello)[,\s]+)?(?:mira|meera|myra|mirah|miira|mera|mirror)\b[,.!?\s]*", re.IGNORECASE)
+_WAKE = re.compile(r"\b(?:(?:hey|hi|ok|okay|hello)[,\s]+)?(?:mira|meera|myra|mirah|miira|mera|mirror|maira|mayra|mirra|amira|miera|mirage)\b[,.!?\s]*", re.IGNORECASE)
 
 
 def split_wake(text: str) -> tuple[bool, str]:
