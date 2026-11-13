@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { API_URL, postJson, sessionId } from "@/lib/api";
+import { useAssistantStore } from "@/stores/assistantStore";
 import type { Driver, SessionStarted } from "@/types/driver";
 
 /** How long the (simulated) face scan runs before the result is shown. */
@@ -65,6 +66,7 @@ export const useDriverStore = create<DriverStore>()((set, get) => ({
         wait(SCAN_MS),
       ]);
       set({ status: "identified", current: result.driver, applied: result.applied, greeting: result.greeting });
+      useAssistantStore.getState().say(result.greeting);
     } catch (error) {
       set({ status: "failed", error: error instanceof Error ? error.message : "Recognition failed" });
     }

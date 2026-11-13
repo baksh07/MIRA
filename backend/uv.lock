@@ -1593,6 +1593,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "fastmcp" },
+    { name = "httpx" },
     { name = "langchain-core" },
     { name = "langchain-openai" },
     { name = "langgraph" },
@@ -1613,6 +1614,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.162.5" },
     { name = "fastmcp", specifier = "==4.1.4" },
+    { name = "httpx", specifier = "==0.28.1" },
     { name = "langchain-core", specifier = "==1.7.3" },
     { name = "langchain-openai", specifier = "==1.7.3" },
     { name = "langgraph", specifier = "==1.2.18" },
