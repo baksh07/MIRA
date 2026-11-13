@@ -20,12 +20,12 @@ from langchain_core.tools import BaseTool, StructuredTool
 
 from mira_backend.models.driver import Driver
 from mira_backend.services.driver_repository import DriverRepository
+from mira_backend.services.preferences import PREFERENCE_KEYS, validate_preference
 from mira_backend.vehicle_mcp.server import mcp
 
 logger = logging.getLogger(__name__)
 
 MAX_MEMORIES_PER_DRIVER = 50
-PREFERENCE_KEYS = ["temperature_c", "seat_heating", "fan_speed", "ambient_color", "ambient_brightness", "driving_mode", "music_volume"]
 # Things never worth keeping, whatever the model thinks.
 SENSITIVE = re.compile(r"\b(password|passcode|pin|credit card|card number|iban|ssn|social security)\b", re.I)
 
@@ -91,27 +91,10 @@ def memory_tools(repo: DriverRepository, driver: Driver, log: ActionLog) -> list
         return "Saved to the driver's memory."
 
     async def save_preference(key: str, value: str) -> str:
-        if key not in PREFERENCE_KEYS:
-            return f"Not saved: key must be one of {', '.join(PREFERENCE_KEYS)}."
-        parsed: Any = value
         try:
-            if key in ("temperature_c",):
-                parsed = round(float(value) * 2) / 2
-                if not 16 <= parsed <= 30:
-                    raise ValueError
-            elif key in ("seat_heating", "fan_speed", "ambient_brightness", "music_volume"):
-                parsed = int(float(value))
-                limit = {"seat_heating": 3, "fan_speed": 7}.get(key, 100)
-                if not 0 <= parsed <= limit:
-                    raise ValueError
-            elif key == "ambient_color":
-                if not re.fullmatch(r"#[0-9A-Fa-f]{6}", value):
-                    raise ValueError
-                parsed = value.upper()
-            elif key == "driving_mode" and value not in ("eco", "comfort", "sport", "sport_plus"):
-                raise ValueError
-        except ValueError:
-            return f"Not saved: {value!r} is not a valid {key}."
+            parsed = validate_preference(key, value)
+        except ValueError as error:
+            return f"Not saved: {error}."
         await repo.set_preference(driver_id, key, parsed, "agent")  # type: ignore[arg-type]
         log.memories.append(f"Preference {key} = {parsed}")
         return f"Saved: {driver.display_name}'s preferred {key} is {parsed}."

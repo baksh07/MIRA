@@ -24,3 +24,8 @@ for now). Switch both to `main` once the user has reviewed and merged a release.
 
 ## Database migrations
 From `backend/`: `uv run python scripts/migrate.py` (idempotent; applies `supabase/migrations` and the seed).
+
+## Resetting the demo
+
+Visitors teach MIRA new preferences and memories. To restore the two demo drivers to their
+seeded state: from `backend/`, `uv run python scripts/reset_demo.py`.

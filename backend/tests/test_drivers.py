@@ -87,3 +87,14 @@ async def test_duplicate_memories_are_not_stored_twice() -> None:
     driver_id = uuid.UUID(drivers()["daniel"]["id"])
     assert await repo.add_memory(driver_id, "preference", "Likes jazz on Fridays") is not None
     assert await repo.add_memory(driver_id, "preference", "likes jazz on fridays.") is None
+
+
+def test_saving_a_preference_is_validated_and_scoped_to_the_session_driver() -> None:
+    sophia_car, _ = identify("sophia")
+    daniel_car, _ = identify("daniel")
+    assert client.put(f"/api/sessions/{sophia_car}/preferences/temperature_c", json={"value": 24.2}).json() == {"key": "temperature_c", "value": 24.0}
+    assert client.get(f"/api/sessions/{sophia_car}/profile").json()["preferences"]["temperature_c"] == 24.0
+    assert client.get(f"/api/sessions/{daniel_car}/profile").json()["preferences"]["temperature_c"] == 22
+    assert client.put(f"/api/sessions/{sophia_car}/preferences/temperature_c", json={"value": 99}).status_code == 422
+    assert client.put(f"/api/sessions/{sophia_car}/preferences/password", json={"value": "x"}).status_code == 422
+    assert client.put(f"/api/sessions/{uuid.uuid4()}/preferences/temperature_c", json={"value": 22}).status_code == 404
