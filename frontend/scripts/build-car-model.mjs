@@ -26,18 +26,37 @@ const PREFIX = "m2g87undg_";
 
 /** Translucent decal materials that only carry badges and lettering. */
 const DECAL_MATERIALS = new Set(["CalliperBadge", "Badge_ext", "Interior_Logo"].map((n) => PREFIX + n));
-/** Opaque emblem material (hood/trunk roundels, steering-wheel centre): repainted plain. */
-const EMBLEM_MATERIAL = PREFIX + "BadgeA";
-const EMBLEM_COLOR = { r: 18, g: 18, b: 20 };
 /**
- * Tyre atlas regions (fractions of width/height) holding the M logo (a rectangle)
- * and the centre-cap roundel (a circle), shaped to stay clear of the sidewall.
+ * Edits to base-colour textures, keyed by material. Coordinates are fractions of
+ * the texture's width/height.
+ *   solid:     replace the whole texture with one colour
+ *   fill:      paint a rect/circle with the most common colour around its edge
+ *   grayscale: remove colour from a region (M-colour stitching and grilles)
  */
-const TYRE_MATERIAL = PREFIX + "Wheel1A_Tire";
-const TYRE_LOGO_REGIONS = [
-  { shape: "rect", x: 0.01, y: 0.05, w: 0.28, h: 0.12 },
-  { shape: "circle", cx: 0.135, cy: 0.865, r: 0.118 },
-];
+const TEXTURE_EDITS = {
+  // Hood/trunk roundels and steering-wheel centre: plain dark emblem.
+  BadgeA: [{ op: "solid", color: { r: 18, g: 18, b: 20 } }],
+  // Tyre atlas: M logo and centre-cap roundel, shaped to stay clear of the sidewall.
+  Wheel1A_Tire: [
+    { op: "fill", shape: "rect", x: 0.01, y: 0.05, w: 0.28, h: 0.12 },
+    { op: "fill", shape: "circle", cx: 0.135, cy: 0.865, r: 0.118 },
+  ],
+  // Branded digital displays: blanked; MIRA draws its own cluster in the cockpit.
+  screen: [{ op: "solid", color: { r: 4, g: 5, b: 7 } }],
+  digidash_screen: [{ op: "solid", color: { r: 4, g: 5, b: 7 } }],
+  // Speaker grilles printed in M colours.
+  Grille2: [{ op: "grayscale" }],
+  // Interior atlases: model logos and M-colour stitching.
+  Interior_Signs: [
+    { op: "fill", shape: "rect", x: 0.0, y: 0.13, w: 0.32, h: 0.075 },
+    { op: "fill", shape: "rect", x: 0.7, y: 0.125, w: 0.12, h: 0.065 },
+    { op: "grayscale", x: 0, y: 0, w: 1, h: 0.125 },
+  ],
+  Interior_Auto: [
+    { op: "fill", shape: "rect", x: 0.0, y: 0.125, w: 0.32, h: 0.09 },
+    { op: "grayscale", x: 0, y: 0, w: 1, h: 0.125 },
+  ],
+};
 
 /** Hidden underbody parts plus the badge lettering mesh. */
 const REMOVED_NODES =
@@ -47,22 +66,70 @@ async function solidPng(color) {
   return sharp({ create: { width: 4, height: 4, channels: 3, background: color } }).png().toBuffer();
 }
 
-async function paintOverRegions(image, regions) {
-  const { width, height } = await sharp(image).metadata();
-  // Sample the fill from the atlas background just right of the first region.
-  const sample = await sharp(image)
-    .extract({ left: Math.round(width * 0.4), top: Math.round(height * 0.01), width: 1, height: 1 })
-    .removeAlpha()
-    .raw()
-    .toBuffer();
-  const fill = `rgb(${sample[0]},${sample[1]},${sample[2]})`;
-  const shapes = regions.map((r) =>
-    r.shape === "circle"
-      ? `<circle cx="${r.cx * width}" cy="${r.cy * height}" r="${r.r * width}" fill="${fill}"/>`
-      : `<rect x="${r.x * width}" y="${r.y * height}" width="${r.w * width}" height="${r.h * height}" fill="${fill}"/>`,
-  );
-  const overlay = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${shapes.join("")}</svg>`);
-  return sharp(image).composite([{ input: overlay }]).png().toBuffer();
+/** Pixel rectangle for a region, clamped to the image. */
+function pixelRect(region, width, height) {
+  const box =
+    region.shape === "circle"
+      ? { x: region.cx - region.r, y: region.cy - (region.r * width) / height, w: region.r * 2, h: (region.r * 2 * width) / height }
+      : { x: region.x ?? 0, y: region.y ?? 0, w: region.w ?? 1, h: region.h ?? 1 };
+  const left = Math.max(0, Math.round(box.x * width));
+  const top = Math.max(0, Math.round(box.y * height));
+  return {
+    left,
+    top,
+    width: Math.min(width - left, Math.round(box.w * width)),
+    height: Math.min(height - top, Math.round(box.h * height)),
+  };
+}
+
+/** The most common colour in a 3px ring just outside a rectangle (the surface the logo sits on). */
+async function surroundingColor(image, rect, width, height) {
+  const pad = 3;
+  const left = Math.max(0, rect.left - pad);
+  const top = Math.max(0, rect.top - pad);
+  const w = Math.min(width - left, rect.width + pad * 2);
+  const h = Math.min(height - top, rect.height + pad * 2);
+  const pixels = await sharp(image).extract({ left, top, width: w, height: h }).removeAlpha().raw().toBuffer();
+  const bins = new Map();
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (x >= pad && x < w - pad && y >= pad && y < h - pad) continue;
+      const i = (y * w + x) * 3;
+      const key = `${pixels[i] >> 4},${pixels[i + 1] >> 4},${pixels[i + 2] >> 4}`;
+      const bin = bins.get(key) ?? { n: 0, r: 0, g: 0, b: 0 };
+      bin.n++;
+      bin.r += pixels[i];
+      bin.g += pixels[i + 1];
+      bin.b += pixels[i + 2];
+      bins.set(key, bin);
+    }
+  }
+  const top1 = [...bins.values()].sort((a, b) => b.n - a.n)[0];
+  return `rgb(${Math.round(top1.r / top1.n)},${Math.round(top1.g / top1.n)},${Math.round(top1.b / top1.n)})`;
+}
+
+async function editImage(image, edits) {
+  let current = image;
+  for (const edit of edits) {
+    const { width, height } = await sharp(current).metadata();
+    if (edit.op === "solid") {
+      current = await solidPng(edit.color);
+    } else if (edit.op === "fill") {
+      const rect = pixelRect(edit, width, height);
+      const fill = await surroundingColor(current, rect, width, height);
+      const shape =
+        edit.shape === "circle"
+          ? `<circle cx="${edit.cx * width}" cy="${edit.cy * height}" r="${edit.r * width}" fill="${fill}"/>`
+          : `<rect x="${rect.left}" y="${rect.top}" width="${rect.width}" height="${rect.height}" fill="${fill}"/>`;
+      const overlay = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${shape}</svg>`);
+      current = await sharp(current).composite([{ input: overlay }]).png().toBuffer();
+    } else if (edit.op === "grayscale") {
+      const rect = pixelRect(edit, width, height);
+      const gray = await sharp(current).extract(rect).grayscale().toColourspace("srgb").png().toBuffer();
+      current = await sharp(current).composite([{ input: gray, left: rect.left, top: rect.top }]).png().toBuffer();
+    }
+  }
+  return current;
 }
 
 function countTriangles(document) {
@@ -91,16 +158,16 @@ for (const mesh of root.listMeshes()) {
     }
   }
 }
-for (const material of root.listMaterials()) {
-  const name = material.getName();
-  const baseColor = material.getBaseColorTexture();
-  if (name === EMBLEM_MATERIAL && baseColor) {
-    baseColor.setImage(await solidPng(EMBLEM_COLOR)).setMimeType("image/png");
-    material.setNormalTexture(null);
-  }
-  if (name === TYRE_MATERIAL && baseColor) {
-    baseColor.setImage(await paintOverRegions(baseColor.getImage(), TYRE_LOGO_REGIONS)).setMimeType("image/png");
-  }
+const editedTextures = new Set();
+for (const [materialName, edits] of Object.entries(TEXTURE_EDITS)) {
+  const material = root.listMaterials().find((m) => m.getName() === PREFIX + materialName);
+  const baseColor = material?.getBaseColorTexture();
+  if (!baseColor) throw new Error(`No base-colour texture for material ${materialName}`);
+  if (editedTextures.has(baseColor)) continue;
+  editedTextures.add(baseColor);
+  baseColor.setImage(await editImage(baseColor.getImage(), edits)).setMimeType("image/png");
+  // A flat replacement keeps no relief from the logo it replaced.
+  if (edits.some((e) => e.op === "solid")) material.setNormalTexture(null);
 }
 
 // 2. Hidden parts.
