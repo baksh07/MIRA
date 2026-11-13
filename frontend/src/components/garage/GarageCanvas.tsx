@@ -2,8 +2,8 @@
 
 import { useProgress } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
-import { useGarageStore } from "@/stores/garageStore";
+import { Suspense, useState, useSyncExternalStore } from "react";
+import { CockpitHud } from "@/components/cockpit/CockpitHud";
 import { CameraRig, GARAGE_CAMERA_POSITION, GarageControls } from "./CameraRig";
 import { CarModel } from "./CarModel";
 import { GarageMessage } from "./GarageMessage";
@@ -39,35 +39,6 @@ function LoadingOverlay() {
   return <GarageMessage>Bringing the car in… {Math.round(progress)}%</GarageMessage>;
 }
 
-/** Shown while seated: how to look around and the way back out (also Escape). */
-function CockpitOverlay() {
-  const view = useGarageStore((state) => state.view);
-  const exitCockpit = useGarageStore((state) => state.exitCockpit);
-
-  useEffect(() => {
-    if (view !== "cockpit") return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") exitCockpit();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [view, exitCockpit]);
-
-  if (view !== "cockpit") return null;
-  return (
-    <div className="absolute inset-x-0 bottom-24 flex flex-col items-center gap-3 px-6 text-center">
-      <p className="text-sm text-brushed">Drag to look around the cabin.</p>
-      <button
-        type="button"
-        onClick={exitCockpit}
-        className="rounded-full border border-halogen/30 bg-floor/70 px-5 py-2 text-sm font-medium text-halogen backdrop-blur-sm transition-colors hover:border-ambient hover:text-ambient"
-      >
-        Leave the car <span className="text-brushed">(Esc)</span>
-      </button>
-    </div>
-  );
-}
-
 /** The 3D garage: the car on its turntable, with doors, hotspots and the cockpit. Browser-only. */
 export default function GarageCanvas() {
   const reducedMotion = usePrefersReducedMotion();
@@ -91,7 +62,7 @@ export default function GarageCanvas() {
         <GarageControls instant={reducedMotion} />
       </Canvas>
       <LoadingOverlay />
-      <CockpitOverlay />
+      <CockpitHud />
     </>
   );
 }
