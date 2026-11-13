@@ -3,10 +3,11 @@
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, HTTPException, Response, WebSocket
+from fastapi import APIRouter, HTTPException, Request, Response, WebSocket
 from pydantic import BaseModel, Field
 
 from mira_backend.core.config import get_settings
+from mira_backend.core.limits import client_ip, speak_limit, voice_sessions
 
 router = APIRouter(tags=["voice"])
 
@@ -26,11 +27,18 @@ async def voice(websocket: WebSocket, vehicle_id: str) -> None:
     if not get_settings().deepgram_api_key:
         await websocket.close(code=1011, reason="Voice is not configured")
         return
-    await websocket.accept()
-    # Imported lazily: Pipecat is heavy and only needed for voice sessions.
-    from mira_backend.voice.pipeline import run_voice_session
+    ip = client_ip(websocket)
+    if not voice_sessions.acquire(ip):
+        await websocket.close(code=1013, reason="Too many voice sessions open; close another tab")
+        return
+    try:
+        await websocket.accept()
+        # Imported lazily: Pipecat is heavy and only needed for voice sessions.
+        from mira_backend.voice.pipeline import run_voice_session
 
-    await run_voice_session(websocket, vid)
+        await run_voice_session(websocket, vid)
+    finally:
+        voice_sessions.release(ip)
 
 
 class SpeakRequest(BaseModel):
@@ -38,8 +46,9 @@ class SpeakRequest(BaseModel):
 
 
 @router.post("/api/voice/speak", response_class=Response, responses={200: {"content": {"audio/mpeg": {}}}})
-async def speak(body: SpeakRequest) -> Response:
+async def speak(body: SpeakRequest, request: Request) -> Response:
     """MIRA's voice for typed replies and greetings (Deepgram Aura, MP3)."""
+    speak_limit.check(client_ip(request))
     settings = get_settings()
     if not settings.deepgram_api_key:
         raise HTTPException(status_code=503, detail="Voice is not configured")
