@@ -1268,17 +1268,26 @@ This section should be updated as development progresses.
 
 ## Overnight report (2026-11-13) — read me first
 
-What works now:
-1. Garage: 3D car, doors (simulator-owned), get in → cockpit.
-2. Driver identification: "Who's driving?" with simulated face recognition (two demo drivers, Daniel ♂ / Sophia ♀); their preferences are applied to the car from Supabase.
-3. Cockpit HUD: instrument cluster, centre display (climate, drive mode, ambient light, music, navigation) all from confirmed backend state; cabin light follows ambient colour.
-4. MIRA (text): LangGraph agent, Groq model chain → OpenAI fallback, MCP vehicle tools, driver memory (remember / save_preference) with policy and isolation.
-5. Tests: backend 38 (pytest), frontend 9 (vitest); tsc, lint, build clean.
+**Live demo:** https://mira-assistant-taupe.vercel.app (backend https://mira-backend-hd83.onrender.com; free tier wakes in ~40 s after idle). Both deploy from `dev`.
+
+Try this: drag the car → Open door → Get in → pick Daniel or Sophia (simulated face scan) → say or type
+*"I'm freezing and tired. Take me home to Munich Marienplatz, let's go."* MIRA applies the cozy scene,
+sets the route and drives; the HUD shows live speed, ETA and fuel, the wheels turn, and she announces arrival.
+
+What works (all verified, locally and on the public URL):
+1. 3D garage, doors (simulator-owned), get in → cockpit; responsive framing at any size/scale.
+2. Driver identification: simulated face recognition for Daniel ♂ / Sophia ♀; preferences from Supabase applied to the car.
+3. Vehicle simulator (one car per browser session): REST + WebSocket sync, FastMCP tools (`/mcp`), drives with live speed/fuel/ETA, cabin scenes, refuel.
+4. Cockpit HUD: instrument cluster, centre display (climate, scenes, drive mode, ambient light, music, navigation/drive), cabin light in the ambient colour.
+5. MIRA agent (LangGraph): Groq chain → OpenAI fallback, MCP tools, driver memory with policy + isolation; memory panel (view/forget).
+6. Voice (Pipecat): mic → Deepgram STT → agent → Deepgram TTS; live captions, barge-in, proactive arrival/low-fuel announcements.
+7. Tests: backend 47 (pytest), frontend 9 (vitest); tsc, lint, build clean. PRs #5–#11 merged into `dev`.
 
 Needs the user:
-- Reset the Supabase database password (it was pasted in chat), then update `DATABASE_URL` in `backend/.env` **and** on Render.
-- Voice: see the section below once Phase 7 lands; real microphone test needs a human.
-- Deploys track `dev`; switch Render + Vercel to `main` after review.
+- Reset the Supabase DB password (pasted in chat earlier) → update `DATABASE_URL` in `backend/.env` **and** on Render.
+- 2-minute real microphone test (tested so far with synthesised speech and Chrome's fake mic).
+- Review `dev`, then merge to `main` and point Render + Vercel production at `main`.
+- Known: dev-only React warning from drei `Html` (not in production); Groq free tier may hit per-minute limits under heavy use (OpenAI fallback covers it).
 
 ## Current Git Branch
 
@@ -1288,7 +1297,7 @@ dev (feature branches merged via PRs)
 
 ## Next Immediate Milestone
 
-Phase 7: Pipecat voice (Deepgram STT + TTS over WebSocket), then extra features.
+Extra features (user asked to keep going until told to stop).
 
 # 16. Long-Term Product Vision
 
