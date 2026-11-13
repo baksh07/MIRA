@@ -2,6 +2,7 @@ import { GarageScene } from "@/components/garage/GarageScene";
 import { GarageStage } from "@/components/garage/GarageStage";
 import { AppFooter } from "@/components/layout/AppFooter";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { DemoGuide } from "@/components/layout/DemoGuide";
 
 export default function Home() {
   return (
@@ -15,6 +16,7 @@ export default function Home() {
         <GarageStage />
       </main>
       <AppFooter />
+      <DemoGuide />
     </div>
   );
 }
