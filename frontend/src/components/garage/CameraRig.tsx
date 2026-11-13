@@ -26,6 +26,9 @@ function cockpitFov(aspect: number): number {
 /** In the seat the orbit target sits just ahead of the eye, so dragging turns the head. */
 const HEAD_RADIUS = 0.05;
 const MOVE_SPEED = 4.2;
+/** Opening shot: low and close at the front, gliding out to the garage view. */
+const INTRO_POSITION = new Vector3(1.9, 0.75, 3.4);
+const INTRO_SPEED = 0.9;
 const ARRIVED = 0.03;
 
 /** The part of the orbit controls the rig drives (registered with `makeDefault`). */
@@ -98,7 +101,7 @@ export function CameraRig({ instant }: { instant: boolean }) {
   const { rig, offset } = useCar();
   const view = useGarageStore((state) => state.view);
   const finishTransition = useGarageStore((state) => state.finishTransition);
-  const path = useRef<{ points: Waypoint[]; index: number } | null>(null);
+  const path = useRef<{ points: Waypoint[]; index: number; speed?: number } | null>(null);
   const framing = useRef(1); // 1 = garage framing, 0 = cockpit
   const pageLayout = usePageLayout();
 
@@ -118,6 +121,18 @@ export function CameraRig({ instant }: { instant: boolean }) {
     const controls = state.controls as unknown as OrbitTarget | null;
 
     const move = path.current;
+    // First frame with the car loaded: start the opening shot.
+    const garageState = useGarageStore.getState();
+    if (garageState.intro && controls && view === "exterior" && !path.current) {
+      if (instant) {
+        garageState.endIntro();
+        return;
+      }
+      camera.position.copy(INTRO_POSITION);
+      path.current = { index: 0, speed: INTRO_SPEED, points: [{ position: new Vector3(...GARAGE_CAMERA_POSITION), target: GARAGE_TARGET.clone() }] };
+      return;
+    }
+
     if (move && controls) {
       if (instant) move.index = move.points.length - 1;
       const goal = move.points[move.index];
@@ -125,8 +140,8 @@ export function CameraRig({ instant }: { instant: boolean }) {
         camera.position.copy(goal.position);
         controls.target.copy(goal.target);
       } else {
-        dampVector(camera.position, goal.position, MOVE_SPEED, delta);
-        dampVector(controls.target, goal.target, MOVE_SPEED, delta);
+        dampVector(camera.position, goal.position, move.speed ?? MOVE_SPEED, delta);
+        dampVector(controls.target, goal.target, move.speed ?? MOVE_SPEED, delta);
       }
       if (camera.position.distanceTo(goal.position) < ARRIVED && controls.target.distanceTo(goal.target) < ARRIVED) {
         // Land exactly: in the seat the target is only HEAD_RADIUS ahead of the eye,
@@ -136,6 +151,7 @@ export function CameraRig({ instant }: { instant: boolean }) {
         move.index++;
         if (move.index >= move.points.length) {
           path.current = null;
+          if (useGarageStore.getState().intro) useGarageStore.getState().endIntro();
           // Once seated, ask the car to close the driver's door behind you.
           if (finishTransition() === "cockpit") {
             useVehicleStore
@@ -167,8 +183,8 @@ export function CameraRig({ instant }: { instant: boolean }) {
   return null;
 }
 
-function controlLimits(view: GarageView, turntable: boolean) {
-  if (view === "exterior") {
+function controlLimits(view: GarageView, turntable: boolean, intro: boolean) {
+  if (view === "exterior" && !intro) {
     return {
       enabled: true,
       enableZoom: true,
@@ -217,6 +233,7 @@ function controlLimits(view: GarageView, turntable: boolean) {
 export function GarageControls({ instant }: { instant: boolean }) {
   const view = useGarageStore((state) => state.view);
   const interacted = useGarageStore((state) => state.interacted);
+  const intro = useGarageStore((state) => state.intro);
   const markInteracted = useGarageStore((state) => state.markInteracted);
   // The car turns slowly on its turntable until the visitor takes control.
   const turntable = !instant && !interacted;
@@ -228,7 +245,7 @@ export function GarageControls({ instant }: { instant: boolean }) {
       enablePan={false}
       autoRotateSpeed={0.35}
       onStart={markInteracted}
-      {...controlLimits(view, turntable)}
+      {...controlLimits(view, turntable, intro)}
     />
   );
 }
