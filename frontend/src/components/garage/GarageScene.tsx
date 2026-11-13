@@ -29,10 +29,13 @@ class SceneErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
   }
 }
 
-/** Full-bleed 3D layer behind the page chrome. */
+/**
+ * Full-bleed 3D layer behind the page chrome. Fixed to the viewport, so it always
+ * fills the window whatever the size of the page box.
+ */
 export function GarageScene() {
   return (
-    <div className="absolute inset-0 -z-10">
+    <div className="fixed inset-0 -z-10 h-dvh w-screen">
       <SceneErrorBoundary>
         <GarageCanvas />
       </SceneErrorBoundary>
