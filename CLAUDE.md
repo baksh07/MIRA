@@ -1263,22 +1263,32 @@ This section should be updated as development progresses.
   - The model build blanks the branded dash displays and removes interior logos and M-colour stitching.
   - Vitest added; store tests pass. Verified in dev and production builds at 1440×900 and 390×844.
 
-## Pending
+- Phase 3a merged (PR #5). Phase 6 vehicle simulator + MCP merged (PR #6). Phase 4 drivers + Supabase + simulated recognition merged (PR #7). Phase 8 agent + memory, Phase 3b cockpit HUD merged (PR #8).
+- **Deployed 2026-11-13** (from `dev`): frontend https://mira-assistant-taupe.vercel.app · backend https://mira-backend-hd83.onrender.com · details in `docs/development/deployment.md`. Verified end to end on the public URL (identify driver → MIRA executes commands via Groq → confirmed in HUD).
 
-- PR `feature/vehicle-interaction` → `dev`.
-- Phase 3b: cockpit displays. Draw MIRA's own instrument cluster and centre screen on the blanked dash screens (`*_digidash_screen` material), fed by a typed vehicle-state model with a clearly marked fixture until the Phase 6 simulator exists.
+## Overnight report (2026-11-13) — read me first
+
+What works now:
+1. Garage: 3D car, doors (simulator-owned), get in → cockpit.
+2. Driver identification: "Who's driving?" with simulated face recognition (two demo drivers, Daniel ♂ / Sophia ♀); their preferences are applied to the car from Supabase.
+3. Cockpit HUD: instrument cluster, centre display (climate, drive mode, ambient light, music, navigation) all from confirmed backend state; cabin light follows ambient colour.
+4. MIRA (text): LangGraph agent, Groq model chain → OpenAI fallback, MCP vehicle tools, driver memory (remember / save_preference) with policy and isolation.
+5. Tests: backend 38 (pytest), frontend 9 (vitest); tsc, lint, build clean.
+
+Needs the user:
+- Reset the Supabase database password (it was pasted in chat), then update `DATABASE_URL` in `backend/.env` **and** on Render.
+- Voice: see the section below once Phase 7 lands; real microphone test needs a human.
+- Deploys track `dev`; switch Render + Vercel to `main` after review.
 
 ## Current Git Branch
 
 ```text
-feature/vehicle-interaction
+dev (feature branches merged via PRs)
 ```
 
 ## Next Immediate Milestone
 
-Phase 3b: cockpit instrument cluster and centre display.
-
----
+Phase 7: Pipecat voice (Deepgram STT + TTS over WebSocket), then extra features.
 
 # 16. Long-Term Product Vision
 
