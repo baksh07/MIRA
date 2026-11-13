@@ -102,6 +102,8 @@ class PostgresDriverRepository:
         driver = await self.get_driver(driver_id)
         if driver is None:
             raise LookupError("Unknown driver")
+        # A driver is in one car at a time: a visit left open (page reloaded, tab closed) ends now.
+        await self._fetch("update sessions set ended_at = now() where driver_id = %s and ended_at is null", driver_id)
         rows = await self._fetch(
             "insert into sessions (vehicle_id, driver_id) values (%s, %s) returning id", vehicle_id, driver_id
         )
@@ -142,6 +144,7 @@ class InMemoryDriverRepository:
         }
         self.memories: dict[UUID, list[Memory]] = {daniel.id: [], sophia.id: []}
         self.sessions: dict[UUID, SessionRecord] = {}
+        self.ended: set[UUID] = set()
         self.messages: dict[UUID, list[dict[str, str]]] = {}
 
     async def list_drivers(self) -> list[Driver]:
@@ -179,12 +182,15 @@ class InMemoryDriverRepository:
         driver = self.drivers.get(driver_id)
         if driver is None:
             raise LookupError("Unknown driver")
+        for open_id, open_record in self.sessions.items():
+            if open_record.driver.id == driver_id:
+                self.ended.add(open_id)
         record = SessionRecord(id=uuid.uuid4(), vehicle_id=vehicle_id, driver=driver)
         self.sessions[record.id] = record
         return record
 
     async def end_session(self, session_id: UUID, summary: str | None = None) -> None:
-        return None
+        self.ended.add(session_id)
 
     async def add_message(self, session_id: UUID, role: str, content: str) -> None:
         self.messages.setdefault(session_id, []).append({"role": role, "content": content})
