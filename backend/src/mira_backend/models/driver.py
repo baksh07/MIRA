@@ -30,6 +30,8 @@ class SessionRecord(BaseModel):
     vehicle_id: UUID
     driver: Driver
     onboarding: bool = Field(False, description="First drive with MIRA: she is getting to know the driver")
+    onboarding_step: int = Field(0, description="Which getting-to-know-you question the driver is answering")
+    call_me: str | None = Field(None, description="The name the driver asked to be called")
 
 
 class StartSession(BaseModel):

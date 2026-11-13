@@ -130,3 +130,65 @@ async def test_new_driver_gets_onboarding_and_returning_driver_does_not() -> Non
     await repo.add_memory(daniel.id, "profile", "Prefers to be called Dan.")
     second = await service.identify(_uuid.uuid4(), daniel.id)
     assert second.greeting.startswith("Welcome back")
+    assert "Dan" in second.greeting  # the name he asked for, not his profile name
+
+
+@pytest.mark.anyio
+async def test_onboarding_asks_each_question_once_and_ends_when_driving_off() -> None:
+    import uuid as _uuid
+
+    from mira_backend.agent.graph import ONBOARDING_TOPICS, system_prompt
+    from mira_backend.api.assistant import advance_session
+    from mira_backend.models.vehicle import LeaveGarage
+    from mira_backend.services.driver_repository import InMemoryDriverRepository
+    from mira_backend.services.sessions import SessionService
+    from mira_backend.services.vehicle_simulator import vehicles
+
+    repo = InMemoryDriverRepository()
+    daniel = next(d for d in repo.drivers.values() if d.slug == "daniel")
+    for memory in await repo.list_memories(daniel.id):
+        await repo.delete_memory(daniel.id, memory.id)
+    service = SessionService(repo)
+    car = _uuid.uuid4()
+    await service.identify(car, daniel.id)
+    session = service.current(car)
+    assert session is not None and session.onboarding_step == 0
+
+    # The name answer: MIRA learns to call him Dan, and moves to the next question.
+    advance_session(session, car, ["Prefers to be called Dan."], stop_onboarding=False)
+    assert session.call_me == "Dan" and session.onboarding_step == 1
+    prompt = system_prompt(vehicles.get(str(car)).state, daniel, {}, [], session.onboarding_step, session.call_me)
+    assert "never ask or change again): what to call them" in prompt and "likes to be called Dan" in prompt
+    assert ONBOARDING_TOPICS[2] in prompt  # the next question
+
+    # A detour still moves on: the same question is never asked twice.
+    advance_session(session, car, [], stop_onboarding=False)
+    assert session.onboarding_step == 2 and session.onboarding
+
+    # Driving off ends the questions for this drive.
+    await vehicles.get(str(car)).apply(LeaveGarage())
+    advance_session(session, car, [], stop_onboarding=False)
+    assert not session.onboarding
+    no_quiz = system_prompt(vehicles.get(str(car)).state, daniel, {}, [], None, "Dan")
+    assert "First drive" not in no_quiz
+
+
+@pytest.mark.anyio
+async def test_driver_can_stop_the_onboarding_questions() -> None:
+    import uuid as _uuid
+
+    from mira_backend.api.assistant import advance_session
+    from mira_backend.services.driver_repository import InMemoryDriverRepository
+    from mira_backend.services.sessions import SessionService
+
+    repo = InMemoryDriverRepository()
+    sophia = next(d for d in repo.drivers.values() if d.slug == "sophia")
+    for memory in await repo.list_memories(sophia.id):
+        await repo.delete_memory(sophia.id, memory.id)
+    service = SessionService(repo)
+    car = _uuid.uuid4()
+    await service.identify(car, sophia.id)
+    session = service.current(car)
+    assert session is not None
+    advance_session(session, car, [], stop_onboarding=True)
+    assert not session.onboarding
