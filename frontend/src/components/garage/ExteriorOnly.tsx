@@ -8,10 +8,11 @@ import { useGarageStore } from "@/stores/garageStore";
  * entering the car. Content takes pointer events only while shown, so place it
  * inside a `pointer-events-none` container over the 3D scene.
  */
-export function ExteriorOnly({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function ExteriorOnly({ children, className = "", id }: { children: ReactNode; className?: string; id?: string }) {
   const outside = useGarageStore((state) => state.view === "exterior");
   return (
     <div
+      id={id}
       inert={!outside}
       className={`transition-opacity duration-500 ${outside ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"} ${className}`}
     >

@@ -5,6 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import { MathUtils, type PerspectiveCamera, Vector3 } from "three";
 import { type GarageView, useGarageStore } from "@/stores/garageStore";
+import { GARAGE_COPY_ID, type PageLayout, type ScreenRect, fitCar } from "./carFraming";
 import { useCar } from "./CarModel";
 
 export const GARAGE_CAMERA_POSITION: [number, number, number] = [5.8, 1.6, 6.9];
@@ -44,13 +45,48 @@ function dampVector(current: Vector3, goal: Vector3, lambda: number, delta: numb
   );
 }
 
-/** Camera framing in the garage: car clear of the page copy, whole on narrow screens. */
-function garageFraming(width: number, height: number) {
-  return {
-    zoom: Math.min(1, Math.max(0.45, width / height / 1.75)),
-    offsetX: width >= 1024 ? -width * 0.22 : 0,
-    offsetY: width >= 1024 ? height * 0.06 : height * 0.2,
-  };
+/** The default garage viewing distance; framing is fitted at this distance so the visitor's own zoom still works. */
+const GARAGE_DISTANCE = new Vector3(...GARAGE_CAMERA_POSITION).distanceTo(GARAGE_TARGET);
+
+function rectOf(selector: string): ScreenRect | null {
+  const el = document.querySelector(selector);
+  if (!el) return null;
+  const { left, top, right, bottom } = el.getBoundingClientRect();
+  return { left, top, right, bottom };
+}
+
+/** Where the page chrome sits over the canvas, re-measured whenever any of it reflows. */
+function usePageLayout() {
+  const layout = useRef<Omit<PageLayout, "width" | "height"> | null>(null);
+
+  useEffect(() => {
+    const measure = () => {
+      const copy = rectOf(`#${GARAGE_COPY_ID}`);
+      const header = rectOf("header");
+      const footer = rectOf("footer");
+      if (!copy) return;
+      layout.current = {
+        copy,
+        headerBottom: header?.bottom ?? 0,
+        footerTop: footer?.top ?? window.innerHeight,
+      };
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    for (const selector of [`#${GARAGE_COPY_ID}`, "header", "footer"]) {
+      const el = document.querySelector(selector);
+      if (el) observer.observe(el);
+    }
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, { passive: true });
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure);
+    };
+  }, []);
+
+  return layout;
 }
 
 /**
@@ -63,6 +99,7 @@ export function CameraRig({ instant }: { instant: boolean }) {
   const finishTransition = useGarageStore((state) => state.finishTransition);
   const path = useRef<{ points: Waypoint[]; index: number } | null>(null);
   const framing = useRef(1); // 1 = garage framing, 0 = cockpit
+  const pageLayout = usePageLayout();
 
   useEffect(() => {
     const eye = rig.seat.eye.clone().add(offset);
@@ -109,7 +146,10 @@ export function CameraRig({ instant }: { instant: boolean }) {
     framing.current = instant ? Number(wantsGarage) : MathUtils.damp(framing.current, Number(wantsGarage), 3, delta);
 
     const { width, height } = state.size;
-    const garage = garageFraming(width, height);
+    const chrome = pageLayout.current;
+    const garage = chrome
+      ? fitCar({ width, height, ...chrome }, { fov: GARAGE_FOV, distance: GARAGE_DISTANCE })
+      : { zoom: 1, offsetX: 0, offsetY: 0 };
     const t = framing.current;
     camera.fov = MathUtils.lerp(cockpitFov(width / height), GARAGE_FOV, t);
     camera.zoom = MathUtils.lerp(1, garage.zoom, t);
