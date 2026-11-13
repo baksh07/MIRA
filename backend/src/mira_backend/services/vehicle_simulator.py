@@ -19,6 +19,7 @@ from mira_backend.models.vehicle import (
     ApplyScene,
     SetPaint,
     Refuel,
+    LeaveGarage,
     StartTrip,
     StopTrip,
     ClearDestination,
@@ -196,7 +197,17 @@ class VehicleSimulator:
                 state.trip.arrived_at = None
                 cruise = CRUISE_KMH[state.driving_mode]
                 state.trip.time_scale = max(1.0, state.navigation.distance_km * 3600 / (cruise * 0.85 * DEMO_TRIP_SECONDS))
+                if state.in_garage:
+                    state.in_garage = False
+                    return f"Garage door open, driving to {state.navigation.destination}"
                 return f"Driving to {state.navigation.destination}"
+            case LeaveGarage():
+                if not state.in_garage:
+                    raise ValueError("We're already out of the garage")
+                if any((state.doors.left_open, state.doors.right_open)):
+                    raise ValueError("Close the doors before driving")
+                state.in_garage = False
+                return "Garage door open, rolling out onto the street"
             case StopTrip():
                 if not state.trip.active:
                     raise ValueError("No drive in progress")

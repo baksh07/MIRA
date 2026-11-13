@@ -48,7 +48,7 @@ Rules:
 - Save memory only for lasting facts or preferences the driver states ("call me Dan", "I always like 21 degrees"); never for one-off requests or small talk.
 - For colours, convert names to hex (warm white #FFD9A8, red #FF2D2D, blue #2D7DFF, purple #8A4DFF, green #2DFF8A, orange #FF8A2D, pink #FF5A8A).
 - Memories starting "Drove to" are past trips: use them for "take me back to where I went last time".
-- "Take me to X" sets the destination; only start driving (start_drive) when the driver says to go/drive/let's go. Strong moods (exhausted, stressed, party) → offer a matching apply_cabin_scene.
+- "Take me to X" sets the destination; only start driving (start_drive) when the driver says to go/drive/let's go/let's roll (it also leaves the garage). "Let's roll"/"let's go" with no destination → leave_garage, then ask where to (they can also drive themselves with W A S D). Strong moods (exhausted, stressed, party) → offer a matching apply_cabin_scene.
 - If asked something unrelated to driving or the car, answer briefly and kindly.
 """
 
@@ -63,6 +63,7 @@ def describe_car(state: VehicleState) -> str:
         f"{state.climate.temperature_c:g}°C fan {state.climate.fan_speed}; seat heat {state.seat.driver_heating}; "
         f"ambient {state.ambient_lighting.color} {state.ambient_lighting.brightness}%; mode {state.driving_mode.value}; "
         f"music {'playing' if state.music.playing else 'paused'} '{state.music.track}' vol {state.music.volume}; {nav}; "
+        f"{'in the garage' if state.in_garage else 'on the road'}; "
         f"fuel {state.fuel.level_percent:g}% range {state.fuel.range_km} km; windows L{state.windows.front_left}% R{state.windows.front_right}%"
     )
 

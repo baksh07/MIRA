@@ -269,3 +269,21 @@ async def test_paint_changes_when_parked_only() -> None:
     await car.apply(StartTrip())
     with pytest.raises(ValueError):
         await car.apply(SetPaint(color="#111111"))
+
+
+@pytest.mark.anyio
+async def test_leaving_the_garage_and_driving_out() -> None:
+    from mira_backend.models.vehicle import LeaveGarage, SetDestination, StartTrip
+    from mira_backend.services.vehicle_simulator import VehicleSimulator
+
+    car = VehicleSimulator(new_id())
+    assert car.state.in_garage
+    result = await car.apply(LeaveGarage())
+    assert result.ok and not result.state.in_garage
+    with pytest.raises(ValueError):
+        await car.apply(LeaveGarage())
+
+    other = VehicleSimulator(new_id())
+    await other.apply(SetDestination(destination="Munich Airport"))
+    started = await other.apply(StartTrip())
+    assert started.ok and not started.state.in_garage and "Garage door open" in started.message
