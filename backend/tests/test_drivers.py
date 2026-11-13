@@ -125,7 +125,7 @@ async def test_new_driver_gets_onboarding_and_returning_driver_does_not() -> Non
     car = _uuid.uuid4()
     first = await service.identify(car, daniel.id)
     assert "what should I call you" in first.greeting and service.current(car).onboarding
-    assert (await repo.recent_messages(first.session_id))[-1]["content"] == first.greeting
+    assert await repo.recent_messages(first.session_id) == []  # the spoken briefing is stored by voice, once
 
     await repo.add_memory(daniel.id, "profile", "Prefers to be called Dan.")
     second = await service.identify(_uuid.uuid4(), daniel.id)
@@ -192,3 +192,36 @@ async def test_driver_can_stop_the_onboarding_questions() -> None:
     assert session is not None
     advance_session(session, car, [], stop_onboarding=True)
     assert not session.onboarding
+
+
+@pytest.mark.anyio
+async def test_onboarding_saves_only_the_asked_setting_and_never_a_for_now_change() -> None:
+    import uuid as _uuid
+
+    from mira_backend.agent.graph import is_temporary, keep_onboarding_settings
+    from mira_backend.agent.tools import ActionLog
+    from mira_backend.services.driver_repository import InMemoryDriverRepository
+    from mira_backend.services.vehicle_simulator import vehicles
+
+    assert is_temporary("Can you set the temperature to 20 degrees, please, as of now?")
+    assert is_temporary("just for now") and not is_temporary("I like 22 degrees")
+
+    repo = InMemoryDriverRepository()
+    sophia = next(d for d in repo.drivers.values() if d.slug == "sophia")
+    state = vehicles.get(str(_uuid.uuid4())).state.model_copy(deep=True)
+    state.climate.temperature_c = 20.0
+    temp = {"tool": "set_cabin_temperature", "ok": True, "message": "Cabin temperature set to 20 °C"}
+
+    # Asked about ambient light (step 5), driver changes the temperature: not saved.
+    log = ActionLog()
+    log.actions.append(temp)
+    await keep_onboarding_settings(repo, sophia, state, log, 5, "It's too hot, 20 degrees please")
+    assert (await repo.get_preferences(sophia.id))["temperature_c"] == 19.5 and not log.memories
+
+    # Asked about temperature but "as of now": a one-off, not saved.
+    await keep_onboarding_settings(repo, sophia, state, log, 1, "Set it to 20 degrees as of now")
+    assert (await repo.get_preferences(sophia.id))["temperature_c"] == 19.5
+
+    # Asked about temperature and answered: saved as her usual.
+    await keep_onboarding_settings(repo, sophia, state, log, 1, "Twenty degrees is perfect")
+    assert (await repo.get_preferences(sophia.id))["temperature_c"] == 20.0

@@ -88,7 +88,6 @@ class SessionService:
             greeting = f"Welcome back, {name}. I've set things up the way you like them."
         else:
             greeting = f"Hello, {name}."
-        await self.repo.add_message(record.id, "assistant", greeting)  # the agent sees its own question
         logger.info("session %s: %s identified in vehicle %s", str(record.id)[:8], name, str(vehicle_id)[:8])
         return SessionStarted(session_id=record.id, driver=record.driver, applied=applied, greeting=greeting)
 

@@ -10,6 +10,7 @@ minute): a one-line car summary, the driver's preferences and recent memories.
 
 import asyncio
 import logging
+import re
 from dataclasses import dataclass, field
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any, TypedDict
@@ -42,7 +43,7 @@ Comfort complaints ("it's getting cold", "too warm", "I'm tired"), when the driv
 2. Compare with their saved preferences and memories.
 3. Propose one concrete, personal change and ask before doing it, e.g. "It's 19 degrees in here, Dan, and you usually like 22. Shall I warm it to 22 and put your seat heating on 1?" Do not change anything yet.
 4. When they agree, make the change, then confirm warmly. If the new value differs from their saved preference, ask once whether it's just for now or should become their usual; on "usual"/"always", call save_preference.
-Exact requests ("set 21 degrees", "seat heating on 2") are done immediately, no confirmation; if they differ from the saved preference, you may briefly ask if it should become their usual.
+Exact requests ("set 21 degrees", "seat heating on 2") are done immediately, no confirmation; they are one-off changes and never saved as a preference unless the driver says it's how they usually or always want it. If they say "for now"/"as of now", do not ask about making it their usual.
 
 Rules:
 - To change anything in the car, call a tool. Only say something changed after the tool confirms it. If a tool fails, say so briefly.
@@ -100,7 +101,7 @@ def onboarding_prompt(step: int) -> str:
         else "That was the last question: thank them, say the car is now set up their way and that they can change anything any time or see it under Memories."
     )
     return f"""First drive with this driver: you are getting to know them.{f" Already covered (never ask or change again): {done}." if done else ""}
-Your last question was about {ONBOARDING_TOPICS[step]}. If this message answers it, {ONBOARDING_ACTIONS[step]}, and nothing else (car settings chosen now become their usual automatically, so never ask "should this be your usual?"). Acknowledge warmly in a few words. {nxt}
+Your last question was about {ONBOARDING_TOPICS[step]}. If this message answers it, {ONBOARDING_ACTIONS[step]}, and nothing else (a car setting chosen as the answer becomes their usual automatically, so never ask "should this be your usual?"; if they say it's only for now, it stays a one-off: say so and ask what they usually like). Acknowledge warmly in a few words. {nxt}
 If they ask for something else instead, help with that first and skip this question. If they want to stop the questions, are in a hurry or want to drive, call finish_getting_to_know and do not ask any more."""
 
 
@@ -132,22 +133,41 @@ class TurnState(TypedDict):
     steps: int
 
 
-# Car settings a driver chooses during onboarding become their usual automatically.
+# Car settings a driver chooses during onboarding become their usual automatically,
+# but only the setting the current question is about, and never when the driver
+# says it's just for now ("set it to 20 as of now").
 ONBOARDING_SETTINGS = {
     "set_cabin_temperature": ("temperature_c", lambda s: s.climate.temperature_c),
     "set_seat_heating": ("seat_heating", lambda s: s.seat.driver_heating),
     "set_driving_mode": ("driving_mode", lambda s: s.driving_mode.value),
     "set_ambient_lighting": ("ambient_color", lambda s: s.ambient_lighting.color),
 }
+# The tool that answers each onboarding question (None: nothing to save as a car setting).
+ONBOARDING_TOOLS = [None, "set_cabin_temperature", "set_seat_heating", "set_driving_mode", None, "set_ambient_lighting"]
+
+TEMPORARY = re.compile(
+    r"\b(for now|as of now|right now|just now|for the moment|at the moment|for today|today|this time|temporar\w*|for a while|for this (drive|trip))\b",
+    re.I,
+)
 
 
-async def keep_onboarding_settings(repo: DriverRepository, driver: Driver, state: VehicleState, log: ActionLog) -> None:
+def is_temporary(message: str) -> bool:
+    """The driver wants a change only for now, not as their usual."""
+    return bool(TEMPORARY.search(message))
+
+
+async def keep_onboarding_settings(
+    repo: DriverRepository, driver: Driver, state: VehicleState, log: ActionLog, step: int, message: str
+) -> None:
+    if step >= len(ONBOARDING_TOOLS) or ONBOARDING_TOOLS[step] is None or is_temporary(message):
+        return
     saved = {m.split(" = ")[0].removeprefix("Preference ") for m in log.memories}
     for action in log.actions:
-        setting = ONBOARDING_SETTINGS.get(action["tool"])
-        if not action["ok"] or not setting or setting[0] in saved:
+        if action["tool"] != ONBOARDING_TOOLS[step] or not action["ok"]:
             continue
-        key, read = setting
+        key, read = ONBOARDING_SETTINGS[action["tool"]]
+        if key in saved:
+            continue
         await repo.set_preference(driver.id, key, read(state), "agent")  # type: ignore[arg-type]
         log.memories.append(f"Preference {key} = {read(state)}")
         saved.add(key)
@@ -218,7 +238,7 @@ async def run_turn(
         final = await app.ainvoke({"messages": messages, "steps": 0})
 
         if onboarding_step is not None and driver:
-            await keep_onboarding_settings(repo, driver, car.state, log)
+            await keep_onboarding_settings(repo, driver, car.state, log, onboarding_step, message)
         last = final["messages"][-1]
         reply = last.content if isinstance(last, AIMessage) and isinstance(last.content, str) else ""
         if not reply.strip() and log.actions:
