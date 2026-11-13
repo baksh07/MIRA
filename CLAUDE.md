@@ -1284,8 +1284,10 @@ What works (all verified, locally and on the public URL):
 7. MIRA speaks typed replies, greets the identified driver and announces arrival/low fuel (🔊 toggle).
 8. Habit learning: picking the same setting twice → MIRA offers to remember it (Yes/Not now) → saved to Supabase.
 9. Guided demo card for first-time visitors (ticks itself off); per-visitor rate limits protect API credit.
-10. Tests: backend 51 (pytest), frontend 12 (vitest); tsc, lint, build clean. PRs #5–#17 merged into `dev`.
-11. `backend/scripts/reset_demo.py` restores the demo drivers (run after showing the demo to others).
+10. Episodic memory: arrivals are remembered per driver ("Drove to X on <date>"); "take me back to where I went last time" works.
+11. Cinematic opening shot; exterior wrap colours (swatches or "make the car racing green").
+12. Tests: backend 53 (pytest), frontend 12 (vitest); tsc, lint, build clean. PRs #5–#21 merged into `dev`.
+13. `backend/scripts/reset_demo.py` restores the demo drivers (run after showing the demo to others).
 
 Needs the user:
 - Reset the Supabase DB password (pasted in chat earlier) → update `DATABASE_URL` in `backend/.env` **and** on Render.
