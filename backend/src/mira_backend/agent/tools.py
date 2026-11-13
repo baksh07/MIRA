@@ -36,6 +36,7 @@ class ActionLog:
     def __init__(self) -> None:
         self.actions: list[dict[str, Any]] = []
         self.memories: list[str] = []
+        self.stop_onboarding = False
 
 
 def _strip_vehicle_id(schema: dict[str, Any]) -> dict[str, Any]:
@@ -141,3 +142,17 @@ def memory_tools(repo: DriverRepository, driver: Driver, log: ActionLog) -> list
             },
         ),
     ]
+
+
+def finish_onboarding_tool(log: ActionLog) -> BaseTool:
+    """Lets the driver end the first-drive questions ("stop, I'm late")."""
+
+    async def finish_getting_to_know() -> str:
+        log.stop_onboarding = True
+        return "No more getting-to-know-you questions this drive."
+
+    return StructuredTool.from_function(
+        coroutine=finish_getting_to_know, name="finish_getting_to_know",
+        description="End the first-drive getting-to-know-you questions when the driver wants to stop, is in a hurry or wants to drive.",
+        args_schema={"type": "object", "properties": {}},
+    )

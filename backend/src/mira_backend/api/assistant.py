@@ -9,11 +9,14 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from mira_backend.agent.graph import run_turn
+from mira_backend.agent.graph import ONBOARDING_TOPICS, run_turn
 from mira_backend.agent.llm import chat_models
 from mira_backend.core.config import get_settings
 from mira_backend.core.limits import chat_limit, client_ip
+from mira_backend.models.driver import SessionRecord
+from mira_backend.services.briefing import preferred_name
 from mira_backend.services.container import container
+from mira_backend.services.vehicle_simulator import vehicles
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["assistant"])
@@ -50,6 +53,25 @@ def _persist(add_message: Callable[[UUID, str, str], Awaitable[None]], session_i
     task.add_done_callback(_background.discard)
 
 
+def advance_session(session: SessionRecord, vehicle_id: UUID, memories: list[str], stop_onboarding: bool) -> None:
+    """After a turn: learn the driver's preferred name and move the first-drive questions on.
+
+    Each question is asked once: whether the driver answered it or went off on
+    something else, the next turn moves to the next one. Driving off, or asking
+    to stop, ends the questions for this drive.
+    """
+    for memory in memories:
+        name = preferred_name(session.driver.display_name, [memory])
+        if name != session.driver.display_name:
+            session.call_me = name
+    if not session.onboarding:
+        return
+    session.onboarding_step += 1
+    car = vehicles.get(str(vehicle_id)).state
+    if stop_onboarding or session.onboarding_step >= len(ONBOARDING_TOPICS) or car.trip.active or not car.in_garage:
+        session.onboarding = False
+
+
 async def converse(
     vehicle_id: UUID, message: str, on_tools: Callable[[list[str]], Awaitable[None]] | None = None
 ) -> ChatResponse:
@@ -67,13 +89,15 @@ async def converse(
         result = await run_turn(
             models=models, repo=services.repo, vehicle_id=str(vehicle_id),
             driver=session.driver if session else None, history=history, message=message,
-            onboarding=bool(session and session.onboarding), on_tools=on_tools,
+            onboarding_step=session.onboarding_step if session and session.onboarding else None,
+            call_me=session.call_me if session else None, on_tools=on_tools,
         )
     except RuntimeError as error:
         logger.error("assistant turn failed: %s", error)
         raise HTTPException(status_code=503, detail="MIRA can't reach her language models right now") from error
 
     if session:
+        advance_session(session, vehicle_id, result.memories, result.stop_onboarding)
         # Saved off the reply path so the driver hears MIRA sooner; written in order.
         _persist(services.repo.add_message, session.id, message, result.reply)
     else:

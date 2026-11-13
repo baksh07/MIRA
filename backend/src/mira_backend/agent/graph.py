@@ -22,7 +22,7 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
 from mira_backend.agent.llm import ModelChain
-from mira_backend.agent.tools import ActionLog, memory_tools, vehicle_tools
+from mira_backend.agent.tools import ActionLog, finish_onboarding_tool, memory_tools, vehicle_tools
 from mira_backend.models.driver import Driver, Memory
 from mira_backend.models.vehicle import VehicleState
 from mira_backend.services.driver_repository import DriverRepository
@@ -50,7 +50,7 @@ Rules:
 - Save memory only for lasting facts or preferences the driver states ("call me Dan", "I always like 21 degrees"); never for one-off requests or small talk.
 - For colours, convert names to hex (warm white #FFD9A8, red #FF2D2D, blue #2D7DFF, purple #8A4DFF, green #2DFF8A, orange #FF8A2D, pink #FF5A8A).
 - Memories starting "Drove to" are past trips: use them for "take me back to where I went last time".
-- "Take me to X" sets the destination; only start driving (start_drive) when the driver says to go/drive/let's go/let's roll (it also leaves the garage). "Let's roll"/"let's go" with no destination → leave_garage, then ask where to (they can also drive themselves with W A S D). Strong moods (exhausted, stressed, party) → offer a matching apply_cabin_scene.
+- "Take me to X" sets the destination; start driving (start_drive, which also leaves the garage) when the driver says to go/drive/let's go/let's roll, or asks to drive somewhere now ("drive me to X", "I'm late, just drive to X") — then set the destination and start_drive in the same turn, never ask them to say "let's go" again. "Let's roll"/"let's go" with no destination → leave_garage, then ask where to (they can also drive themselves with W A S D). Strong moods (exhausted, stressed, party) → offer a matching apply_cabin_scene.
 - If asked something unrelated to driving or the car, answer briefly and kindly.
 """
 
@@ -70,22 +70,54 @@ def describe_car(state: VehicleState) -> str:
     )
 
 
-ONBOARDING = """First drive with this driver: you are getting to know them. Ask ONE short, friendly question per turn, in this order, skipping anything you already know:
-1. what to call them, 2. a comfortable cabin temperature, 3. seat heating (off or 1-3), 4. driving style (eco, comfort or sport), 5. music they enjoy, 6. a favourite ambient light colour.
-After each answer: apply only that newest answer (never re-apply earlier ones); save it straight away (remember for facts such as their name or music taste; save_preference for temperature_c, seat_heating, driving_mode, ambient_color), apply settings to the car with the matching tool, acknowledge warmly in a few words, then ask the next question.
-Settings chosen now are saved as their usual automatically, so never ask "should this be your usual?" here; only say a setting changed once its tool confirmed it.
-If they ask for something else, help first, then gently continue. If they want to skip or stop, stop asking.
-After the last question, thank them, tell them the car is now set up their way and that they can change anything any time or see it under Memories."""
+# The getting-to-know-you questions of a driver's first drive, asked one per turn.
+# Progress is tracked by the session (not left to the model), so a question is
+# never asked twice, even after a detour like "just drive me to Munich".
+ONBOARDING_TOPICS = [
+    "what to call them",
+    "a comfortable cabin temperature",
+    "seat heating (off or level 1 to 3)",
+    "driving style (eco, comfort or sport)",
+    "music they enjoy",
+    "a favourite ambient light colour",
+]
+# What to do with each answer: exactly one tool, so earlier answers are never re-applied.
+ONBOARDING_ACTIONS = [
+    'call remember, e.g. "Prefers to be called Dan."',
+    "call set_cabin_temperature with the value that fits now",
+    "call set_seat_heating",
+    "call set_driving_mode",
+    'call remember with their taste, e.g. "Likes podcasts on long drives and jazz on short ones." (do not touch the music player)',
+    "call set_ambient_lighting",
+]
+
+
+def onboarding_prompt(step: int) -> str:
+    done = ", ".join(ONBOARDING_TOPICS[:step])
+    nxt = (
+        f"Then ask ONE short, friendly question about: {ONBOARDING_TOPICS[step + 1]}."
+        if step + 1 < len(ONBOARDING_TOPICS)
+        else "That was the last question: thank them, say the car is now set up their way and that they can change anything any time or see it under Memories."
+    )
+    return f"""First drive with this driver: you are getting to know them.{f" Already covered (never ask or change again): {done}." if done else ""}
+Your last question was about {ONBOARDING_TOPICS[step]}. If this message answers it, {ONBOARDING_ACTIONS[step]}, and nothing else (car settings chosen now become their usual automatically, so never ask "should this be your usual?"). Acknowledge warmly in a few words. {nxt}
+If they ask for something else instead, help with that first and skip this question. If they want to stop the questions, are in a hurry or want to drive, call finish_getting_to_know and do not ask any more."""
 
 
 def system_prompt(
-    car: VehicleState, driver: Driver | None, prefs: dict[str, Any], memories: list[Memory], onboarding: bool = False
+    car: VehicleState,
+    driver: Driver | None,
+    prefs: dict[str, Any],
+    memories: list[Memory],
+    onboarding_step: int | None = None,
+    call_me: str | None = None,
 ) -> str:
     parts = [SYSTEM, f"Car now: {describe_car(car)}."]
-    if driver and onboarding:
-        parts.append(ONBOARDING)
+    if driver and onboarding_step is not None and onboarding_step < len(ONBOARDING_TOPICS):
+        parts.append(onboarding_prompt(onboarding_step))
     if driver:
-        parts.append(f"Driver: {driver.display_name} ({driver.gender}).")
+        named = f", who likes to be called {call_me}" if call_me and call_me != driver.display_name else ""
+        parts.append(f"Driver: {driver.display_name} ({driver.gender}){named}.")
         if prefs:
             parts.append("Their saved preferences: " + ", ".join(f"{k}={v}" for k, v in prefs.items()) + ".")
         if memories:
@@ -127,6 +159,7 @@ class TurnResult:
     actions: list[dict[str, Any]] = field(default_factory=list)
     memories: list[str] = field(default_factory=list)
     model: str | None = None
+    stop_onboarding: bool = False
 
 
 async def run_turn(
@@ -137,7 +170,8 @@ async def run_turn(
     driver: Driver | None,
     history: list[dict[str, str]],
     message: str,
-    onboarding: bool = False,
+    onboarding_step: int | None = None,
+    call_me: str | None = None,
     on_tools: Callable[[list[str]], Awaitable[None]] | None = None,
 ) -> TurnResult:
     """One agent turn. `on_tools` is told which tools are about to run (voice uses it to say "one moment")."""
@@ -152,6 +186,8 @@ async def run_turn(
         tools = await vehicle_tools(mcp_client, vehicle_id, log)
         if driver:
             tools += memory_tools(repo, driver, log)
+        if driver and onboarding_step is not None:
+            tools.append(finish_onboarding_tool(log))
         chain = ModelChain(models, tools)
 
         async def agent(state: TurnState) -> dict[str, Any]:
@@ -174,14 +210,14 @@ async def run_turn(
         graph.add_edge("tools", "agent")
         app = graph.compile()
 
-        messages: list[AnyMessage] = [SystemMessage(system_prompt(car.state, driver, prefs, memories, onboarding))]
+        messages: list[AnyMessage] = [SystemMessage(system_prompt(car.state, driver, prefs, memories, onboarding_step, call_me))]
         for item in history[-8:]:
             messages.append(HumanMessage(item["content"]) if item["role"] == "user" else AIMessage(item["content"]))
         messages.append(HumanMessage(message))
 
         final = await app.ainvoke({"messages": messages, "steps": 0})
 
-        if onboarding and driver:
+        if onboarding_step is not None and driver:
             await keep_onboarding_settings(repo, driver, car.state, log)
         last = final["messages"][-1]
         reply = last.content if isinstance(last, AIMessage) and isinstance(last.content, str) else ""
@@ -199,4 +235,6 @@ async def run_turn(
         # The model stopped after tools without speaking: report what really happened.
         done = [a["message"] for a in log.actions if a["ok"]]
         reply = ". ".join(done) + "." if done else "Sorry, I couldn't do that."
-    return TurnResult(reply=reply.strip(), actions=log.actions, memories=log.memories, model=chain.used)
+    return TurnResult(
+        reply=reply.strip(), actions=log.actions, memories=log.memories, model=chain.used, stop_onboarding=log.stop_onboarding
+    )

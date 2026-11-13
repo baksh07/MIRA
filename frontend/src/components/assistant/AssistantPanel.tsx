@@ -3,6 +3,7 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useAssistantStore } from "@/stores/assistantStore";
 import { useDriverStore } from "@/stores/driverStore";
+import { useVoiceStore } from "@/stores/voiceStore";
 import { MemoryPanel } from "./MemoryPanel";
 
 const SUGGESTIONS = ["I'm cold", "Purple ambient light", "Take me to the airport", "Sport mode, please"];
@@ -22,13 +23,14 @@ export function AssistantOrb({ status, size = "size-12" }: { status: string; siz
 export function AssistantPanel({ voice }: { voice?: ReactNode }) {
   const { turns, status, speakReplies, toggleSpeakReplies } = useAssistantStore();
   const driver = useDriverStore((s) => s.current);
+  const caption = useVoiceStore((s) => s.caption); // what MIRA is hearing right now
   const [draft, setDraft] = useState("");
   const [showMemory, setShowMemory] = useState(false);
   const log = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight, behavior: "smooth" });
-  }, [turns.length]);
+  }, [turns.length, caption]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -103,6 +105,11 @@ export function AssistantPanel({ voice }: { voice?: ReactNode }) {
             ))}
           </div>
         ))}
+        {caption && (
+          <p className="text-right" aria-live="polite">
+            <span className="inline-block max-w-[90%] rounded-2xl border border-dashed border-halogen/20 px-3 py-2 text-left italic text-brushed">{caption}</span>
+          </p>
+        )}
       </div>
 
       <form onSubmit={submit} className="mt-3 flex items-center gap-2">

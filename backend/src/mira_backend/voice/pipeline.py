@@ -51,7 +51,7 @@ from pipecat.transports.websocket.fastapi import (
 from mira_backend.api.assistant import converse
 from mira_backend.core.config import get_settings
 from mira_backend.models.vehicle import VehicleState
-from mira_backend.services.briefing import briefing, preferred_name
+from mira_backend.services.briefing import briefing
 from mira_backend.services.container import container
 from mira_backend.services.vehicle_simulator import vehicles
 from mira_backend.voice.wake import FOLLOW_UP_SECONDS, is_speech, split_wake, turn_gap
@@ -165,13 +165,14 @@ class MiraBrain(FrameProcessor):
         await self.push_frame(event("user", text=text))
         if not request:
             session = container().sessions.current(self._vehicle_id)
-            reply = f"Yes, {session.driver.display_name}?" if session else "Yes?"
+            reply = f"Yes, {session.call_me or session.driver.display_name}?" if session else "Yes?"
             await self.push_frame(event("assistant", text=reply, actions=[], memories=[]))
             await self.push_frame(TTSSpeakFrame(reply))
             return
         self._awake_until = float("inf")  # stay engaged while thinking
         await self.push_frame(event("status", status="thinking"))
-        name = session.driver.display_name if (session := container().sessions.current(self._vehicle_id)) else None
+        session = container().sessions.current(self._vehicle_id)
+        name = (session.call_me or session.driver.display_name) if session else None
         announced = False
 
         async def tools_starting(tools: list[str]) -> None:
@@ -286,9 +287,8 @@ async def run_voice_session(websocket: WebSocket, vehicle_id: UUID) -> None:
         services = container()
         session = services.sessions.current(vehicle_id)
         if session:
-            memories = [m.content for m in await services.repo.list_memories(session.driver.id, limit=20)]
-            name = preferred_name(session.driver.display_name, memories)
-            text = await briefing(name, first_drive=session.onboarding and not memories, returning=bool(memories))
+            name = session.call_me or session.driver.display_name
+            text = await briefing(name, first_drive=session.onboarding, returning=not session.onboarding)
         else:
             text = await briefing(None)
         if session:

@@ -9,7 +9,7 @@ import { useVoiceStore } from "@/stores/voiceStore";
  * or reconnects if voice is off.
  */
 export function VoiceButton() {
-  const { state, muted, caption, level, start, toggleMute } = useVoiceStore();
+  const { state, muted, level, start, toggleMute } = useVoiceStore();
 
   useEffect(() => () => useVoiceStore.getState().stop(), []);
 
@@ -45,11 +45,6 @@ export function VoiceButton() {
           )}
         </svg>
       </button>
-      {caption && (
-        <p className="pointer-events-none fixed inset-x-0 bottom-28 text-center text-lg text-halogen/90 drop-shadow" aria-live="polite">
-          {caption}
-        </p>
-      )}
     </>
   );
 }

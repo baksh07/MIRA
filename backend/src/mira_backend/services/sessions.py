@@ -21,6 +21,7 @@ from mira_backend.models.vehicle import (
     SetTemperature,
     VehicleCommand,
 )
+from mira_backend.services.briefing import preferred_name
 from mira_backend.services.driver_repository import DriverRepository
 from mira_backend.services.vehicle_simulator import vehicles
 
@@ -65,8 +66,10 @@ class SessionService:
         await self.leave(vehicle_id)
         record = await self.repo.start_session(vehicle_id, driver_id)
         # A driver MIRA knows nothing about yet gets onboarding for this session.
-        new_driver = not await self.repo.list_memories(driver_id, limit=1)
-        record = record.model_copy(update={"onboarding": new_driver})
+        memories = [m.content for m in await self.repo.list_memories(driver_id, limit=20)]
+        new_driver = not memories
+        call_me = preferred_name(record.driver.display_name, memories)
+        record = record.model_copy(update={"onboarding": new_driver, "call_me": call_me})
         self._active[str(vehicle_id)] = record
 
         car = vehicles.get(str(vehicle_id))
@@ -75,7 +78,7 @@ class SessionService:
             result = await car.apply(command)
             applied.append(result.message)
 
-        name = record.driver.display_name
+        name = call_me
         if new_driver:
             greeting = (
                 f"Hi {name}, I'm MIRA. This is our first drive together, so I'd love to get to know you "
