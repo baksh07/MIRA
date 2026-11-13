@@ -1281,7 +1281,11 @@ What works (all verified, locally and on the public URL):
 4. Cockpit HUD: instrument cluster, centre display (climate, scenes, drive mode, ambient light, music, navigation/drive), cabin light in the ambient colour.
 5. MIRA agent (LangGraph): Groq chain → OpenAI fallback, MCP tools, driver memory with policy + isolation; memory panel (view/forget).
 6. Voice (Pipecat): mic → Deepgram STT → agent → Deepgram TTS; live captions, barge-in, proactive arrival/low-fuel announcements.
-7. Tests: backend 47 (pytest), frontend 9 (vitest); tsc, lint, build clean. PRs #5–#11 merged into `dev`.
+7. MIRA speaks typed replies, greets the identified driver and announces arrival/low fuel (🔊 toggle).
+8. Habit learning: picking the same setting twice → MIRA offers to remember it (Yes/Not now) → saved to Supabase.
+9. Guided demo card for first-time visitors (ticks itself off); per-visitor rate limits protect API credit.
+10. Tests: backend 51 (pytest), frontend 12 (vitest); tsc, lint, build clean. PRs #5–#17 merged into `dev`.
+11. `backend/scripts/reset_demo.py` restores the demo drivers (run after showing the demo to others).
 
 Needs the user:
 - Reset the Supabase DB password (pasted in chat earlier) → update `DATABASE_URL` in `backend/.env` **and** on Render.
