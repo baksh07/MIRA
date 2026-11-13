@@ -99,8 +99,9 @@ Backend tooling: Python 3.12 managed with **uv** (`pyproject.toml` + `uv.lock`, 
 | Technology | Responsibility |
 |---|---|
 | Pipecat | Real-time voice pipeline |
-| Deepgram | Speech recognition |
-| ElevenLabs | Speech generation |
+| Deepgram | Speech recognition and speech generation (Aura TTS) — ElevenLabs dropped by user decision 2026-11-13 |
+
+LLM for the agent (user decision 2026-11-13): **Groq primary, OpenAI as automatic fallback** when a Groq call fails. Keys in `backend/.env` (`GROQ_API_KEY`, `OPENAI_API_KEY`). Groq models: `GROQ_MODELS=openai/gpt-oss-20b,openai/gpt-oss-120b,qwen/qwen3.8-27b`, tried in order. Each model has its own free quota (measured from response headers: 1000 requests/day, 8000 tokens/min per model). On a 429 or an error the next model takes over; OpenAI is the final fallback. The user asked for `llama-3.1-8b-instant`, but it is retired on Groq (404 model_not_found); all three models above passed a live tool-calling test (~0.4 s). Keep agent calls lean (tokens/min is the tighter limit): one LLM call per command where possible, compact prompts, and memory extraction batched at the end of a session.
 
 Pipecat is responsible for audio processing and real-time voice transport.
 
@@ -395,6 +396,10 @@ Requirements:
 - Avoid treating an uncertain recognition result as confirmed identity.
 
 For the initial MVP, manual driver selection should be implemented first.
+
+**Current decision (user, 2026-11-13): recognition is simulated.** Two demo characters (one male, one female). Selecting a character shows a "Recognizing face…" step, then "identifies" that character. No camera access and no biometric processing at all; real recognition is a later phase.
+
+Deployment target (user, 2026-11-13): Supabase cloud, plus a public deployed site the user can send to their professor.
 
 Face recognition can be introduced after the profile system works reliably.
 
