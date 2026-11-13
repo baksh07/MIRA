@@ -54,7 +54,7 @@ from mira_backend.models.vehicle import VehicleState
 from mira_backend.services.briefing import briefing
 from mira_backend.services.container import container
 from mira_backend.services.vehicle_simulator import vehicles
-from mira_backend.voice.wake import FOLLOW_UP_SECONDS, split_wake
+from mira_backend.voice.wake import FOLLOW_UP_SECONDS, is_speech, split_wake
 
 logger = logging.getLogger(__name__)
 
@@ -107,15 +107,18 @@ class MiraBrain(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
         if isinstance(frame, TranscriptionFrame):
-            if frame.text.strip():
+            if is_speech(frame.text):
                 self._parts.append(frame.text.strip())
                 self._schedule()
             return
         if isinstance(frame, InterimTranscriptionFrame):
-            if frame.text.strip():
+            if is_speech(frame.text):
                 await self.push_frame(event("interim", text=frame.text.strip()))
-                if self._bot_speaking and self.awake:
-                    # Barge-in: the driver talks over MIRA; the client stops playback.
+                if self._bot_speaking:
+                    # Barge-in: the driver talks over MIRA. Cancel her speech in the
+                    # pipeline (TTS stops generating) and tell the client to stop playback.
+                    self._bot_speaking = False
+                    asyncio.create_task(self.broadcast_interruption())
                     await self.push_frame(event("interrupt"))
                 if self._pending:
                     self._pending.cancel()  # still talking: wait for the end of the utterance
@@ -213,7 +216,7 @@ async def run_voice_session(websocket: WebSocket, vehicle_id: UUID) -> None:
         sample_rate=IN_RATE,
         live_options=LiveOptions(
             model=settings.deepgram_stt_model, language="en-US", smart_format=True,
-            punctuate=True, interim_results=True, endpointing=300,
+            punctuate=True, interim_results=True, endpointing=500,
         ),
     )
     tts = DeepgramTTSService(api_key=settings.deepgram_api_key, voice=settings.deepgram_tts_voice, sample_rate=OUT_RATE)

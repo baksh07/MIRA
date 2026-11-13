@@ -24,3 +24,21 @@ def split_wake(text: str) -> tuple[bool, str]:
     before = text[: match.start()].strip(" ,.")
     after = text[match.end() :].strip()
     return True, after or before
+
+
+# One-word answers that are real replies, not noise.
+_SHORT_REPLIES = {"yes", "yeah", "yep", "no", "nope", "ok", "okay", "sure", "stop", "wait", "thanks", "please", "cancel"}
+
+
+def is_speech(text: str) -> bool:
+    """Strict check that a transcript is the driver talking, not noise.
+
+    Background noise and coughs usually come through as nothing, one stray word
+    or filler ("uh", "hmm"); two or more words, a known short reply, or MIRA's
+    name count as speech.
+    """
+    words = [w for w in "".join(c if c.isalpha() or c.isspace() or c == "'" else " " for c in text.lower()).split()]
+    words = [w for w in words if w not in {"uh", "um", "hmm", "mm", "ah", "oh", "er", "huh"}]
+    if len(words) >= 2:
+        return True
+    return bool(words) and (words[0] in _SHORT_REPLIES or split_wake(words[0])[0])

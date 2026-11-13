@@ -93,3 +93,12 @@ def test_briefing_mentions_driver_weather_and_traffic() -> None:
     assert "14 degrees in Munich with overcast" in text and "heavy" in text
     night = briefing_text(None, datetime(2026, 11, 15, 23, 30), None)
     assert night.startswith("Good evening.") and "light" in night
+
+
+def test_noise_is_not_speech_but_short_replies_are() -> None:
+    from mira_backend.voice.wake import is_speech
+
+    for noise in ["", "uh", "Hmm.", "the", "uh um"]:
+        assert not is_speech(noise), noise
+    for speech in ["Yes.", "stop", "Mira", "turn it down", "No, thanks"]:
+        assert is_speech(speech), speech
