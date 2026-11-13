@@ -3,7 +3,12 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from pipecat.frames.frames import InputAudioRawFrame, OutputAudioRawFrame, OutputTransportMessageFrame, TextFrame
+from pipecat.frames.frames import (
+    InputAudioRawFrame,
+    OutputAudioRawFrame,
+    OutputTransportMessageFrame,
+    TextFrame,
+)
 from starlette.websockets import WebSocketDisconnect
 
 from mira_backend.main import app
@@ -64,3 +69,27 @@ def test_proactive_messages_on_arrival_and_low_fuel() -> None:
 def test_speak_requires_configuration_and_validates_text() -> None:
     assert client.post("/api/voice/speak", json={"text": "hello"}).status_code == 503
     assert client.post("/api/voice/speak", json={"text": ""}).status_code == 422
+
+
+def test_wake_word_variants_and_request_extraction() -> None:
+    from mira_backend.voice.wake import split_wake
+
+    assert split_wake("Hey Mira, I'm cold") == (True, "I'm cold")
+    assert split_wake("Meera take me to Munich.") == (True, "take me to Munich.")
+    assert split_wake("Turn up the heat, Mira.") == (True, "Turn up the heat")
+    assert split_wake("Mira?") == (True, "")
+    assert split_wake("what a nice admiral") == (False, "what a nice admiral")
+    assert split_wake("turn it up") == (False, "turn it up")
+
+
+def test_briefing_mentions_driver_weather_and_traffic() -> None:
+    from datetime import datetime
+
+    from mira_backend.services.briefing import Weather, briefing_text, describe_code
+
+    rush = datetime(2026, 11, 13, 8, 0)  # Friday morning
+    text = briefing_text("Daniel", rush, Weather(14, describe_code(3)))
+    assert text.startswith("Good morning, Daniel.")
+    assert "14 degrees in Munich with overcast" in text and "heavy" in text
+    night = briefing_text(None, datetime(2026, 11, 15, 23, 30), None)
+    assert night.startswith("Good evening.") and "light" in night

@@ -44,7 +44,7 @@ export function AssistantPanel({ voice }: { voice?: ReactNode }) {
         <div className="min-w-0 flex-1">
           <p className="font-bold tracking-wide [font-stretch:115%]">MIRA</p>
           <p className="text-xs text-brushed" role="status" aria-live="polite">
-            {status === "thinking" ? "Thinking…" : status === "listening" ? "Listening…" : status === "speaking" ? "Speaking…" : driver ? `Ready for you, ${driver.display_name}` : "Ready. Select a driver so I can remember you."}
+            {status === "thinking" ? "Thinking…" : status === "listening" ? "Listening…" : status === "standby" ? "Say “MIRA” to talk" : status === "speaking" ? "Speaking…" : driver ? `Ready for you, ${driver.display_name}` : "Ready. Select a driver so I can remember you."}
           </p>
         </div>
         <button

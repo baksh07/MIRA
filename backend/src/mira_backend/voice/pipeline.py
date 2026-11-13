@@ -10,12 +10,18 @@ small so the browser client stays tiny:
 
   client → server   binary: 16 kHz mono PCM16 microphone audio
   server → client   binary: 24 kHz mono PCM16 speech
-                    text:   JSON events {type: status|interim|user|assistant|interrupt|error, ...}
+                    text:   JSON events {type: status|interim|user|standby|assistant|interrupt|error, ...}
+
+MIRA greets the driver with a short briefing (weather, traffic) when the
+session opens, then answers when addressed by name ("MIRA, …") or within a
+short follow-up window after she spoke. Anything else is reported as
+`standby` (heard, not for her) and ignored.
 """
 
 import asyncio
 import json
 import logging
+import time
 from uuid import UUID
 
 from fastapi import HTTPException, WebSocket
@@ -37,12 +43,18 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.serializers.base_serializer import FrameSerializer
 from pipecat.services.deepgram.stt import DeepgramSTTService, LiveOptions
 from pipecat.services.deepgram.tts import DeepgramTTSService
-from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPIWebsocketTransport
+from pipecat.transports.websocket.fastapi import (
+    FastAPIWebsocketParams,
+    FastAPIWebsocketTransport,
+)
 
 from mira_backend.api.assistant import converse
 from mira_backend.core.config import get_settings
 from mira_backend.models.vehicle import VehicleState
+from mira_backend.services.briefing import briefing
+from mira_backend.services.container import container
 from mira_backend.services.vehicle_simulator import vehicles
+from mira_backend.voice.wake import FOLLOW_UP_SECONDS, split_wake
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +94,15 @@ class MiraBrain(FrameProcessor):
         self._parts: list[str] = []
         self._pending: asyncio.Task[None] | None = None
         self._bot_speaking = False
+        self._awake_until = 0.0
+
+    def wake(self) -> None:
+        """Open the follow-up window: the driver may answer without saying "MIRA"."""
+        self._awake_until = time.monotonic() + FOLLOW_UP_SECONDS
+
+    @property
+    def awake(self) -> bool:
+        return self._bot_speaking or time.monotonic() < self._awake_until
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
@@ -93,7 +114,7 @@ class MiraBrain(FrameProcessor):
         if isinstance(frame, InterimTranscriptionFrame):
             if frame.text.strip():
                 await self.push_frame(event("interim", text=frame.text.strip()))
-                if self._bot_speaking:
+                if self._bot_speaking and self.awake:
                     # Barge-in: the driver talks over MIRA; the client stops playback.
                     await self.push_frame(event("interrupt"))
                 if self._pending:
@@ -104,7 +125,8 @@ class MiraBrain(FrameProcessor):
             await self.push_frame(event("status", status="speaking"))
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self._bot_speaking = False
-            await self.push_frame(event("status", status="idle"))
+            self.wake()
+            await self.push_frame(event("status", status="listening", seconds=FOLLOW_UP_SECONDS))
         await self.push_frame(frame, direction)
 
     def _schedule(self) -> None:
@@ -121,15 +143,27 @@ class MiraBrain(FrameProcessor):
         self._parts.clear()
         if not text:
             return
+        addressed, request = split_wake(text)
+        if not addressed and not self.awake:
+            await self.push_frame(event("standby", text=text))
+            return
         await self.push_frame(event("user", text=text))
+        if not request:
+            session = container().sessions.current(self._vehicle_id)
+            reply = f"Yes, {session.driver.display_name}?" if session else "Yes?"
+            await self.push_frame(event("assistant", text=reply, actions=[], memories=[]))
+            await self.push_frame(TTSSpeakFrame(reply))
+            return
+        self._awake_until = float("inf")  # stay engaged while thinking
         await self.push_frame(event("status", status="thinking"))
         try:
-            result = await converse(self._vehicle_id, text[:500])
+            result = await converse(self._vehicle_id, request[:500])
             await self.push_frame(
                 event("assistant", text=result.reply, actions=[a["message"] for a in result.actions if a["ok"]], memories=result.memories)
             )
             await self.push_frame(TTSSpeakFrame(result.reply))
         except HTTPException as error:
+            self.wake()
             await self.push_frame(event("error", message=str(error.detail)))
             await self.push_frame(event("status", status="idle"))
 
@@ -183,7 +217,8 @@ async def run_voice_session(websocket: WebSocket, vehicle_id: UUID) -> None:
         ),
     )
     tts = DeepgramTTSService(api_key=settings.deepgram_api_key, voice=settings.deepgram_tts_voice, sample_rate=OUT_RATE)
-    pipeline = Pipeline([transport.input(), stt, MiraBrain(vehicle_id), tts, transport.output()])
+    brain = MiraBrain(vehicle_id)
+    pipeline = Pipeline([transport.input(), stt, brain, tts, transport.output()])
     task = PipelineTask(
         pipeline,
         params=PipelineParams(audio_in_sample_rate=IN_RATE, audio_out_sample_rate=OUT_RATE),
@@ -192,7 +227,10 @@ async def run_voice_session(websocket: WebSocket, vehicle_id: UUID) -> None:
 
     @transport.event_handler("on_client_connected")
     async def on_connected(_transport: object, _client: object) -> None:
-        await task.queue_frames([event("status", status="idle")])
+        session = container().sessions.current(vehicle_id)
+        text = await briefing(session.driver.display_name if session else None)
+        brain.wake()
+        await task.queue_frames([event("assistant", text=text, actions=[], memories=[]), TTSSpeakFrame(text)])
 
     @transport.event_handler("on_client_disconnected")
     async def on_disconnected(_transport: object, _client: object) -> None:

@@ -45,6 +45,15 @@ def _strip_vehicle_id(schema: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
+def checked_summary(state: dict[str, Any]) -> str:
+    """What the driver sees when MIRA reads the car (shown as a step in the chat)."""
+    climate, seat = state.get("climate", {}), state.get("seat", {})
+    if "temperature_c" not in climate:
+        return "Checked the car"
+    heat = seat.get("driver_heating", 0)
+    return f"Checked the cabin: {climate['temperature_c']:g} °C, seat heating {'off' if not heat else heat}"
+
+
 async def vehicle_tools(mcp_client: Client, vehicle_id: str, log: ActionLog) -> list[BaseTool]:
     tools: list[BaseTool] = []
     for spec in await mcp_client.list_tools():
@@ -58,6 +67,7 @@ async def vehicle_tools(mcp_client: Client, vehicle_id: str, log: ActionLog) -> 
                 return f"FAILED: {text[:300]}"
             payload = result.data if isinstance(result.data, dict) else json.loads(text or "{}")
             if _name == "get_vehicle_status":
+                log.actions.append({"tool": _name, "ok": True, "message": checked_summary(payload)})
                 return json.dumps(payload)
             log.actions.append({"tool": _name, "ok": True, "message": payload.get("message", "")})
             return payload.get("message", "done")

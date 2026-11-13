@@ -7,21 +7,37 @@ import { useAssistantStore } from "@/stores/assistantStore";
 
 /**
  * Hands-free conversation with MIRA. While on, the microphone streams to the
- * voice pipeline; transcripts and replies land in the same transcript as text chat.
+ * voice pipeline: MIRA greets the driver, then answers when called by name
+ * ("MIRA, …") or right after she has spoken. Transcripts and replies land in
+ * the same transcript as text chat.
  */
 export function VoiceButton() {
   const [state, setState] = useState<"off" | "connecting" | "on">("off");
   const [caption, setCaption] = useState("");
   const [level, setLevel] = useState(0);
   const session = useRef<VoiceSession | null>(null);
+  const followUp = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => session.current?.stop(), []);
+
+  /** After MIRA speaks she listens for a few seconds; then she waits for her name again. */
+  const setVoiceStatus = (status: "standby" | "listening" | "thinking" | "speaking", seconds?: number) => {
+    if (followUp.current) clearTimeout(followUp.current);
+    followUp.current = null;
+    useAssistantStore.getState().setStatus(status);
+    if (status === "listening" && seconds) {
+      followUp.current = setTimeout(() => useAssistantStore.getState().setStatus("standby"), seconds * 1000);
+    }
+  };
 
   const onEvent = (event: VoiceEvent) => {
     const store = useAssistantStore.getState();
     switch (event.type) {
       case "status":
-        store.setStatus(event.status === "idle" ? "listening" : event.status);
+        setVoiceStatus(event.status === "idle" ? "standby" : event.status, event.seconds);
+        break;
+      case "standby":
+        setCaption("");
         break;
       case "interim":
         setCaption(event.text);
@@ -46,7 +62,7 @@ export function VoiceButton() {
       session.current = await startVoice(sessionId(), onEvent, (l) => setLevel((prev) => prev * 0.6 + l * 0.4));
       setState("on");
       useAssistantStore.setState({ voiceOn: true });
-      useAssistantStore.getState().setStatus("listening");
+      setVoiceStatus("thinking");
     } catch (error) {
       setState("off");
       const reason =
@@ -60,6 +76,7 @@ export function VoiceButton() {
   const stop = () => {
     session.current?.stop();
     session.current = null;
+    if (followUp.current) clearTimeout(followUp.current);
     setState("off");
     setCaption("");
     useAssistantStore.setState({ voiceOn: false });
