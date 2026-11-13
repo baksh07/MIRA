@@ -3,6 +3,7 @@
 import { useProgress } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Suspense, useState, useSyncExternalStore } from "react";
+import { VoiceButton } from "@/components/assistant/VoiceButton";
 import { CockpitHud } from "@/components/cockpit/CockpitHud";
 import { CameraRig, GARAGE_CAMERA_POSITION, GarageControls } from "./CameraRig";
 import { CarModel } from "./CarModel";
@@ -62,7 +63,7 @@ export default function GarageCanvas() {
         <GarageControls instant={reducedMotion} />
       </Canvas>
       <LoadingOverlay />
-      <CockpitHud />
+      <CockpitHud voice={<VoiceButton />} />
     </>
   );
 }
