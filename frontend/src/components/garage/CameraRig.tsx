@@ -4,7 +4,8 @@ import { OrbitControls } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import { MathUtils, type PerspectiveCamera, Vector3 } from "three";
-import { type GarageView, useGarageStore } from "@/stores/garageStore";
+import { DRIVER_SIDE, type GarageView, useGarageStore } from "@/stores/garageStore";
+import { useVehicleStore } from "@/stores/vehicleStore";
 import { GARAGE_COPY_ID, type PageLayout, type ScreenRect, fitCar } from "./carFraming";
 import { useCar } from "./CarModel";
 
@@ -135,7 +136,13 @@ export function CameraRig({ instant }: { instant: boolean }) {
         move.index++;
         if (move.index >= move.points.length) {
           path.current = null;
-          finishTransition();
+          // Once seated, ask the car to close the driver's door behind you.
+          if (finishTransition() === "cockpit") {
+            useVehicleStore
+              .getState()
+              .send({ type: "set_door", door: DRIVER_SIDE, open: false })
+              .catch((error) => console.warn("Could not close the door", error));
+          }
         }
       }
     }

@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { Component, type ReactNode } from "react";
+import { VehicleConnection } from "@/components/vehicle/VehicleConnection";
 import { GarageMessage } from "./GarageMessage";
 
 // three.js needs the browser (WebGL); keep it out of the server render and the main bundle.
@@ -36,6 +37,7 @@ class SceneErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
 export function GarageScene() {
   return (
     <div className="fixed inset-0 -z-10 h-dvh w-screen">
+      <VehicleConnection />
       <SceneErrorBoundary>
         <GarageCanvas />
       </SceneErrorBoundary>

@@ -9,29 +9,16 @@ beforeEach(() => {
 });
 
 describe("garage store", () => {
-  it("starts outside the car with doors closed and the turntable running", () => {
+  it("starts outside the car with the turntable running", () => {
     expect(state().view).toBe("exterior");
-    expect(state().doors).toEqual({ left: false, right: false });
     expect(state().interacted).toBe(false);
   });
 
-  it("toggles each door independently and stops the turntable", () => {
-    state().toggleDoor("right");
-    expect(state().doors).toEqual({ left: false, right: true });
-    expect(state().interacted).toBe(true);
-    state().toggleDoor("left");
-    state().toggleDoor("right");
-    expect(state().doors).toEqual({ left: true, right: false });
-  });
-
-  it("enters through the driver's door and closes it once seated", () => {
+  it("enters the cockpit and stops the turntable", () => {
     state().enterCockpit();
     expect(state().view).toBe("entering");
-    expect(state().doors.left).toBe(true);
-
-    state().finishTransition();
-    expect(state().view).toBe("cockpit");
-    expect(state().doors.left).toBe(false);
+    expect(state().interacted).toBe(true);
+    expect(state().finishTransition()).toBe("cockpit");
   });
 
   it("leaves the cockpit back to the garage", () => {
@@ -39,24 +26,13 @@ describe("garage store", () => {
     state().finishTransition();
     state().exitCockpit();
     expect(state().view).toBe("exiting");
-    state().finishTransition();
-    expect(state().view).toBe("exterior");
-  });
-
-  it("ignores door toggles while not standing in the garage", () => {
-    state().enterCockpit();
-    state().toggleDoor("right");
-    expect(state().doors.right).toBe(false);
-    state().finishTransition();
-    state().toggleDoor("left");
-    expect(state().doors.left).toBe(false);
+    expect(state().finishTransition()).toBe("exterior");
   });
 
   it("ignores out-of-order transitions", () => {
     state().exitCockpit(); // not seated
     expect(state().view).toBe("exterior");
-    state().finishTransition(); // nothing in progress
-    expect(state().view).toBe("exterior");
+    expect(state().finishTransition()).toBe("exterior"); // nothing in progress
     state().enterCockpit();
     state().enterCockpit(); // already entering
     expect(state().view).toBe("entering");
