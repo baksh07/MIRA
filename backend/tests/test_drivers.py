@@ -98,3 +98,13 @@ def test_saving_a_preference_is_validated_and_scoped_to_the_session_driver() -> 
     assert client.put(f"/api/sessions/{sophia_car}/preferences/temperature_c", json={"value": 99}).status_code == 422
     assert client.put(f"/api/sessions/{sophia_car}/preferences/password", json={"value": "x"}).status_code == 422
     assert client.put(f"/api/sessions/{uuid.uuid4()}/preferences/temperature_c", json={"value": 22}).status_code == 404
+
+
+
+@pytest.mark.anyio
+async def test_arrival_is_remembered_as_an_episodic_memory_for_that_driver() -> None:
+    vid, started = identify("sophia")
+    await container().sessions.record_arrival(vid, "Lake Starnberg")
+    memories = client.get(f"/api/sessions/{vid}/profile").json()["memories"]
+    assert any(m["content"].startswith("Drove to Lake Starnberg") and m["category"] == "episodic" for m in memories)
+    await container().sessions.record_arrival(str(uuid.uuid4()), "Nowhere")  # no driver: nothing stored
