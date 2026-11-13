@@ -29,7 +29,10 @@ export function VehicleConnection() {
       useVehicleStore.subscribe((next, prev) => {
         if (!next.state || !prev.state || useAssistantStore.getState().voiceOn) return;
         const text = notice(prev.state, next.state);
-        if (text) useAssistantStore.getState().addTurn({ role: "assistant", text });
+        if (text) {
+          useAssistantStore.getState().addTurn({ role: "assistant", text });
+          useAssistantStore.getState().say(text);
+        }
       }),
     [],
   );

@@ -2,7 +2,9 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, WebSocket
+import httpx
+from fastapi import APIRouter, HTTPException, Response, WebSocket
+from pydantic import BaseModel, Field
 
 from mira_backend.core.config import get_settings
 
@@ -29,3 +31,25 @@ async def voice(websocket: WebSocket, vehicle_id: str) -> None:
     from mira_backend.voice.pipeline import run_voice_session
 
     await run_voice_session(websocket, vid)
+
+
+class SpeakRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=400)
+
+
+@router.post("/api/voice/speak", response_class=Response, responses={200: {"content": {"audio/mpeg": {}}}})
+async def speak(body: SpeakRequest) -> Response:
+    """MIRA's voice for typed replies and greetings (Deepgram Aura, MP3)."""
+    settings = get_settings()
+    if not settings.deepgram_api_key:
+        raise HTTPException(status_code=503, detail="Voice is not configured")
+    async with httpx.AsyncClient(timeout=20) as client:
+        reply = await client.post(
+            "https://api.deepgram.com/v1/speak",
+            params={"model": settings.deepgram_tts_voice, "encoding": "mp3"},
+            headers={"Authorization": f"Token {settings.deepgram_api_key}"},
+            json={"text": body.text},
+        )
+    if reply.status_code != 200:
+        raise HTTPException(status_code=502, detail="Speech service unavailable")
+    return Response(content=reply.content, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})

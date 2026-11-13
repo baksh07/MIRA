@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { postJson, sessionId } from "@/lib/api";
+import { speak, stopSpeaking } from "@/lib/speech";
 
 export interface ChatTurn {
   id: number;
@@ -25,6 +26,11 @@ interface AssistantStore {
   error: string | null;
   /** A voice session is open (MIRA then speaks proactive notices herself). */
   voiceOn: boolean;
+  /** Read typed replies and notices aloud (when no voice session is open). */
+  speakReplies: boolean;
+  toggleSpeakReplies: () => void;
+  /** Says something in MIRA's voice if spoken replies are on. */
+  say: (text: string) => void;
   setStatus: (status: AssistantStatus) => void;
   addTurn: (turn: Omit<ChatTurn, "id">) => void;
   /** Sends a typed message; the reply appears once the backend has answered. */
@@ -38,6 +44,16 @@ export const useAssistantStore = create<AssistantStore>()((set, get) => ({
   status: "idle",
   error: null,
   voiceOn: false,
+  speakReplies: true,
+
+  toggleSpeakReplies: () => {
+    if (get().speakReplies) stopSpeaking();
+    set({ speakReplies: !get().speakReplies });
+  },
+
+  say: (text) => {
+    if (get().speakReplies && !get().voiceOn) void speak(text).catch(() => undefined);
+  },
 
   setStatus: (status) => set({ status }),
 
@@ -57,6 +73,7 @@ export const useAssistantStore = create<AssistantStore>()((set, get) => ({
         memories: result.memories,
       });
       set({ status: "idle" });
+      get().say(result.reply);
       return result;
     } catch (error) {
       const reason = error instanceof Error ? error.message : "MIRA is unavailable";

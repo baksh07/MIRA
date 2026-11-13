@@ -59,3 +59,8 @@ def test_proactive_messages_on_arrival_and_low_fuel() -> None:
     full.fuel.level_percent = 15.2
     assert "fuel is down to 15 percent" in proactive_message(full, low)
     assert proactive_message(low, low) is None
+
+
+def test_speak_requires_configuration_and_validates_text() -> None:
+    assert client.post("/api/voice/speak", json={"text": "hello"}).status_code == 503
+    assert client.post("/api/voice/speak", json={"text": ""}).status_code == 422

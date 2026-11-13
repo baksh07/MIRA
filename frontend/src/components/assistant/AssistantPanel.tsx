@@ -20,7 +20,7 @@ export function AssistantOrb({ status, size = "size-12" }: { status: string; siz
 
 /** Talk to MIRA. `voice` is the microphone control, slotted in by the voice feature. */
 export function AssistantPanel({ voice }: { voice?: ReactNode }) {
-  const { turns, status } = useAssistantStore();
+  const { turns, status, speakReplies, toggleSpeakReplies } = useAssistantStore();
   const driver = useDriverStore((s) => s.current);
   const [draft, setDraft] = useState("");
   const [showMemory, setShowMemory] = useState(false);
@@ -47,6 +47,16 @@ export function AssistantPanel({ voice }: { voice?: ReactNode }) {
             {status === "thinking" ? "Thinking…" : status === "listening" ? "Listening…" : status === "speaking" ? "Speaking…" : driver ? `Ready for you, ${driver.display_name}` : "Ready. Select a driver so I can remember you."}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={toggleSpeakReplies}
+          aria-pressed={speakReplies}
+          aria-label={speakReplies ? "Mute MIRA's spoken replies" : "Read MIRA's replies aloud"}
+          title={speakReplies ? "Spoken replies on" : "Spoken replies off"}
+          className="rounded-full bg-halogen/8 px-2.5 py-1 text-xs hover:bg-halogen/15"
+        >
+          {speakReplies ? "🔊" : "🔇"}
+        </button>
         <button
           type="button"
           onClick={() => setShowMemory((v) => !v)}
