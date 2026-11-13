@@ -37,7 +37,9 @@ export function VoiceButton() {
         setVoiceStatus(event.status === "idle" ? "standby" : event.status, event.seconds);
         break;
       case "standby":
-        setCaption("");
+        // Heard, but not addressed to MIRA: say so instead of silently ignoring it.
+        setCaption(`“${event.text}” — say “MIRA” first so I know you mean me`);
+        setTimeout(() => setCaption((c) => (c.startsWith(`“${event.text}”`) ? "" : c)), 3500);
         break;
       case "interim":
         setCaption(event.text);

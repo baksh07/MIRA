@@ -95,6 +95,7 @@ class MiraBrain(FrameProcessor):
         self._pending: asyncio.Task[None] | None = None
         self._bot_speaking = False
         self._awake_until = 0.0
+        self._turns = asyncio.Lock()  # one agent turn at a time, in order
 
     def wake(self) -> None:
         """Open the follow-up window: the driver may answer without saying "MIRA"."""
@@ -138,14 +139,24 @@ class MiraBrain(FrameProcessor):
         self._pending = asyncio.create_task(self._respond_after_gap())
 
     async def _respond_after_gap(self) -> None:
+        # Only this short wait is cancellable (the driver is still talking).
         try:
             await asyncio.sleep(TURN_GAP_SECONDS)
         except asyncio.CancelledError:
             return
         text = " ".join(self._parts).strip()
         self._parts.clear()
-        if not text:
-            return
+        self._pending = None
+        if text:
+            # The turn itself runs on its own task: new speech must never cancel
+            # an answer that is already being worked on.
+            asyncio.create_task(self._take_turn(text))
+
+    async def _take_turn(self, text: str) -> None:
+        async with self._turns:
+            await self._respond(text)
+
+    async def _respond(self, text: str) -> None:
         addressed, request = split_wake(text)
         if not addressed and not self.awake:
             await self.push_frame(event("standby", text=text))
@@ -165,10 +176,12 @@ class MiraBrain(FrameProcessor):
                 event("assistant", text=result.reply, actions=[a["message"] for a in result.actions if a["ok"]], memories=result.memories)
             )
             await self.push_frame(TTSSpeakFrame(result.reply))
-        except HTTPException as error:
+        except Exception as error:  # noqa: BLE001 - always answer, never leave the driver hanging
             self.wake()
-            await self.push_frame(event("error", message=str(error.detail)))
-            await self.push_frame(event("status", status="idle"))
+            detail = error.detail if isinstance(error, HTTPException) else "Sorry, I lost my train of thought. Could you say that again?"
+            logger.warning("voice turn failed: %s", type(error).__name__)
+            await self.push_frame(event("assistant", text=str(detail), actions=[], memories=[]))
+            await self.push_frame(TTSSpeakFrame(str(detail)))
 
 
 LOW_FUEL_PERCENT = 15
@@ -217,6 +230,7 @@ async def run_voice_session(websocket: WebSocket, vehicle_id: UUID) -> None:
         live_options=LiveOptions(
             model=settings.deepgram_stt_model, language="en-US", smart_format=True,
             punctuate=True, interim_results=True, endpointing=500,
+            keyterm=["MIRA"],  # boost her name so the wake word is heard reliably
         ),
     )
     tts = DeepgramTTSService(api_key=settings.deepgram_api_key, voice=settings.deepgram_tts_voice, sample_rate=OUT_RATE)

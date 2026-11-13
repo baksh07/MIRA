@@ -102,3 +102,42 @@ def test_noise_is_not_speech_but_short_replies_are() -> None:
         assert not is_speech(noise), noise
     for speech in ["Yes.", "stop", "Mira", "turn it down", "No, thanks"]:
         assert is_speech(speech), speech
+
+
+@pytest.mark.anyio
+async def test_new_speech_does_not_cancel_an_answer_in_progress(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    from pipecat.frames.frames import InterimTranscriptionFrame, TranscriptionFrame, TTSSpeakFrame
+    from pipecat.processors.frame_processor import FrameDirection
+
+    from mira_backend.voice import pipeline
+
+    started = asyncio.Event()
+
+    class Reply:
+        reply = "On our way, Daniel."
+        actions: list = []
+        memories: list = []
+
+    async def slow_converse(_vehicle_id: object, _text: str) -> Reply:
+        started.set()
+        await asyncio.sleep(0.3)
+        return Reply()
+
+    monkeypatch.setattr(pipeline, "converse", slow_converse)
+    monkeypatch.setattr(pipeline, "TURN_GAP_SECONDS", 0.01)
+    brain = pipeline.MiraBrain(uuid.uuid4())
+    pushed: list = []
+
+    async def capture(frame: object, *_: object) -> None:
+        pushed.append(frame)
+
+    monkeypatch.setattr(brain, "push_frame", capture)
+    monkeypatch.setattr(pipeline.FrameProcessor, "process_frame", lambda *_: asyncio.sleep(0))
+    down = FrameDirection.DOWNSTREAM
+    await brain.process_frame(TranscriptionFrame("Mira, how far is Munich?", "u", "t"), down)
+    await asyncio.wait_for(started.wait(), 1)
+    await brain.process_frame(InterimTranscriptionFrame("and also the music", "u", "t"), down)  # talking during thinking
+    await asyncio.sleep(0.5)
+    assert any(isinstance(f, TTSSpeakFrame) and f.text == "On our way, Daniel." for f in pushed)
