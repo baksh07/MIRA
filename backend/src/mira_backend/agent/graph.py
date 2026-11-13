@@ -68,8 +68,20 @@ def describe_car(state: VehicleState) -> str:
     )
 
 
-def system_prompt(car: VehicleState, driver: Driver | None, prefs: dict[str, Any], memories: list[Memory]) -> str:
+ONBOARDING = """First drive with this driver: you are getting to know them. Ask ONE short, friendly question per turn, in this order, skipping anything you already know:
+1. what to call them, 2. a comfortable cabin temperature, 3. seat heating (off or 1-3), 4. driving style (eco, comfort or sport), 5. music they enjoy, 6. a favourite ambient light colour.
+After each answer: apply only that newest answer (never re-apply earlier ones); save it straight away (remember for facts such as their name or music taste; save_preference for temperature_c, seat_heating, driving_mode, ambient_color), apply settings to the car with the matching tool, acknowledge warmly in a few words, then ask the next question.
+Settings chosen now are saved as their usual automatically, so never ask "should this be your usual?" here; only say a setting changed once its tool confirmed it.
+If they ask for something else, help first, then gently continue. If they want to skip or stop, stop asking.
+After the last question, thank them, tell them the car is now set up their way and that they can change anything any time or see it under Memories."""
+
+
+def system_prompt(
+    car: VehicleState, driver: Driver | None, prefs: dict[str, Any], memories: list[Memory], onboarding: bool = False
+) -> str:
     parts = [SYSTEM, f"Car now: {describe_car(car)}."]
+    if driver and onboarding:
+        parts.append(ONBOARDING)
     if driver:
         parts.append(f"Driver: {driver.display_name} ({driver.gender}).")
         if prefs:
@@ -84,6 +96,27 @@ def system_prompt(car: VehicleState, driver: Driver | None, prefs: dict[str, Any
 class TurnState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     steps: int
+
+
+# Car settings a driver chooses during onboarding become their usual automatically.
+ONBOARDING_SETTINGS = {
+    "set_cabin_temperature": ("temperature_c", lambda s: s.climate.temperature_c),
+    "set_seat_heating": ("seat_heating", lambda s: s.seat.driver_heating),
+    "set_driving_mode": ("driving_mode", lambda s: s.driving_mode.value),
+    "set_ambient_lighting": ("ambient_color", lambda s: s.ambient_lighting.color),
+}
+
+
+async def keep_onboarding_settings(repo: DriverRepository, driver: Driver, state: VehicleState, log: ActionLog) -> None:
+    saved = {m.split(" = ")[0].removeprefix("Preference ") for m in log.memories}
+    for action in log.actions:
+        setting = ONBOARDING_SETTINGS.get(action["tool"])
+        if not action["ok"] or not setting or setting[0] in saved:
+            continue
+        key, read = setting
+        await repo.set_preference(driver.id, key, read(state), "onboarding")  # type: ignore[arg-type]
+        log.memories.append(f"Preference {key} = {read(state)}")
+        saved.add(key)
 
 
 @dataclass
@@ -102,6 +135,7 @@ async def run_turn(
     driver: Driver | None,
     history: list[dict[str, str]],
     message: str,
+    onboarding: bool = False,
 ) -> TurnResult:
     log = ActionLog()
     car = vehicles.get(vehicle_id)
@@ -132,21 +166,24 @@ async def run_turn(
         graph.add_edge("tools", "agent")
         app = graph.compile()
 
-        messages: list[AnyMessage] = [SystemMessage(system_prompt(car.state, driver, prefs, memories))]
+        messages: list[AnyMessage] = [SystemMessage(system_prompt(car.state, driver, prefs, memories, onboarding))]
         for item in history[-8:]:
             messages.append(HumanMessage(item["content"]) if item["role"] == "user" else AIMessage(item["content"]))
         messages.append(HumanMessage(message))
 
         final = await app.ainvoke({"messages": messages, "steps": 0})
 
+        if onboarding and driver:
+            await keep_onboarding_settings(repo, driver, car.state, log)
         last = final["messages"][-1]
         reply = last.content if isinstance(last, AIMessage) and isinstance(last.content, str) else ""
         if not reply.strip() and log.actions:
             # The model acted but said nothing: ask it once (without tools) to speak to the driver.
             try:
-                closing = await chain.ainvoke(
-                    [*final["messages"], HumanMessage("(Now tell the driver, warmly and personally, what you did.)")]
-                )
+                done = list(final["messages"])
+                if isinstance(done[-1], AIMessage) and done[-1].tool_calls:
+                    done.pop()  # step limit reached mid-request: providers reject unanswered tool calls
+                closing = await chain.ainvoke([*done, HumanMessage("(Now tell the driver, warmly and personally, what you did.)")])
                 reply = getattr(closing, "content", "") if isinstance(getattr(closing, "content", None), str) else ""
             except Exception:  # noqa: BLE001 - the factual fallback below still answers
                 logger.warning("closing reply failed", exc_info=True)

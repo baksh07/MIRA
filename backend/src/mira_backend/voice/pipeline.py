@@ -244,8 +244,14 @@ async def run_voice_session(websocket: WebSocket, vehicle_id: UUID) -> None:
 
     @transport.event_handler("on_client_connected")
     async def on_connected(_transport: object, _client: object) -> None:
-        session = container().sessions.current(vehicle_id)
+        services = container()
+        session = services.sessions.current(vehicle_id)
         text = await briefing(session.driver.display_name if session else None)
+        if session and session.onboarding and not await services.repo.list_memories(session.driver.id, limit=1):
+            # Still getting to know a new driver: lead with the first onboarding question.
+            text = text.replace("Just say MIRA whenever you need me.", "Since this is our first drive, what should I call you?")
+        if session:
+            await services.repo.add_message(session.id, "assistant", text)
         brain.wake()
         await task.queue_frames([event("assistant", text=text, actions=[], memories=[]), TTSSpeakFrame(text)])
 

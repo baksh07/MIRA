@@ -64,6 +64,9 @@ class SessionService:
     async def identify(self, vehicle_id: UUID, driver_id: UUID) -> SessionStarted:
         await self.leave(vehicle_id)
         record = await self.repo.start_session(vehicle_id, driver_id)
+        # A driver MIRA knows nothing about yet gets onboarding for this session.
+        new_driver = not await self.repo.list_memories(driver_id, limit=1)
+        record = record.model_copy(update={"onboarding": new_driver})
         self._active[str(vehicle_id)] = record
 
         car = vehicles.get(str(vehicle_id))
@@ -73,7 +76,16 @@ class SessionService:
             applied.append(result.message)
 
         name = record.driver.display_name
-        greeting = f"Welcome back, {name}. I've set things up the way you like them." if applied else f"Hello, {name}."
+        if new_driver:
+            greeting = (
+                f"Hi {name}, I'm MIRA. This is our first drive together, so I'd love to get to know you "
+                "and make this car yours. First things first: what should I call you?"
+            )
+        elif applied:
+            greeting = f"Welcome back, {name}. I've set things up the way you like them."
+        else:
+            greeting = f"Hello, {name}."
+        await self.repo.add_message(record.id, "assistant", greeting)  # the agent sees its own question
         logger.info("session %s: %s identified in vehicle %s", str(record.id)[:8], name, str(vehicle_id)[:8])
         return SessionStarted(session_id=record.id, driver=record.driver, applied=applied, greeting=greeting)
 
