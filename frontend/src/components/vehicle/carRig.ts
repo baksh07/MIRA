@@ -24,12 +24,16 @@ export interface SeatPose {
 export interface CarRig {
   doors: Record<DoorSide, DoorRig>;
   seat: SeatPose;
+  /** Rims and tyres; each is centred on its hub, so it spins about its local x axis. */
+  wheels: Object3D[];
 }
 
 const DOOR_OPEN_ANGLE = 1.1; // ~63°
 /** Door parts in the model: outer shell, inner trim panel and window glass. */
 const doorParts = (code: "L" | "R") => new RegExp(`_door(panel|glass)?_${code}_\\d+$`);
 const STEERING_WHEEL = /_dash_steer_a_\d+$/;
+// GLTFLoader strips "." from node names, so the copies read e.g. "rimslaw_enkei_tsr_x_R21001_131".
+const WHEEL_PARTS = /^(rimslaw_enkei_tsr_x_R21|m2g87undg_tire_01_R20)/;
 
 function find(scene: Object3D, pattern: RegExp): Object3D[] {
   const found: Object3D[] = [];
@@ -93,7 +97,7 @@ export function rigCar(scene: Object3D): CarRig {
 
   scene.updateMatrixWorld(true);
   const doors = { left: rigDoor(scene, "left"), right: rigDoor(scene, "right") };
-  const rig: CarRig = { doors, seat: seatPose(scene, doors.left) };
+  const rig: CarRig = { doors, seat: seatPose(scene, doors.left), wheels: find(scene, WHEEL_PARTS) };
   scene.userData.rig = rig;
   return rig;
 }

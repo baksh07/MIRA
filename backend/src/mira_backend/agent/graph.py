@@ -40,6 +40,7 @@ Rules:
 - Use remembered preferences only when relevant (e.g. "make it comfortable" → their preferred temperature).
 - Save memory only for lasting facts or preferences the driver states ("call me Dan", "I always like 21 degrees"); never for one-off requests or small talk.
 - For colours, convert names to hex (warm white #FFD9A8, red #FF2D2D, blue #2D7DFF, purple #8A4DFF, green #2DFF8A, orange #FF8A2D, pink #FF5A8A).
+- "Take me to X" sets the destination; only start driving (start_drive) when the driver says to go/drive/let's go. Moods (tired, stressed, cold, party, late) → apply_cabin_scene.
 - If asked something unrelated to driving or the car, answer briefly and kindly.
 """
 

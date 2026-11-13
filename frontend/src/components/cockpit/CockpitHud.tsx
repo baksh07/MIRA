@@ -30,7 +30,7 @@ export function CockpitHud({ voice }: { voice?: ReactNode }) {
         <button
           type="button"
           onClick={exitCockpit}
-          className="glass pointer-events-auto rounded-full px-4 py-2 text-sm transition-colors hover:text-ambient"
+          className="border border-halogen/10 bg-floor/60 backdrop-blur-md backdrop-saturate-150 pointer-events-auto rounded-full px-4 py-2 text-sm transition-colors hover:text-ambient"
         >
           ← Leave the car <span className="text-brushed">(Esc)</span>
         </button>
@@ -38,7 +38,7 @@ export function CockpitHud({ voice }: { voice?: ReactNode }) {
           type="button"
           onClick={() => setControlsOpen((open) => !open)}
           aria-expanded={controlsOpen}
-          className="glass pointer-events-auto rounded-full px-4 py-2 text-sm lg:hidden"
+          className="border border-halogen/10 bg-floor/60 backdrop-blur-md backdrop-saturate-150 pointer-events-auto rounded-full px-4 py-2 text-sm lg:hidden"
         >
           {controlsOpen ? "Hide controls" : "Car controls"}
         </button>

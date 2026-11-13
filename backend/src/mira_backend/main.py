@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -12,6 +13,7 @@ from mira_backend.api.vehicle import router as vehicle_router
 from mira_backend.api.voice import router as voice_router
 from mira_backend.core.config import get_settings
 from mira_backend.services import container
+from mira_backend.services.vehicle_simulator import vehicles
 from mira_backend.vehicle_mcp.server import mcp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -25,8 +27,10 @@ mcp_app = mcp.http_app(path="/")
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await container.startup()
+    ticker = asyncio.create_task(vehicles.run_ticker())
     async with mcp_app.lifespan(app):
         yield
+    ticker.cancel()
     await container.shutdown()
 
 

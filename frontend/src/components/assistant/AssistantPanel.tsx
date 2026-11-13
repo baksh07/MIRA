@@ -3,6 +3,7 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useAssistantStore } from "@/stores/assistantStore";
 import { useDriverStore } from "@/stores/driverStore";
+import { MemoryPanel } from "./MemoryPanel";
 
 const SUGGESTIONS = ["I'm cold", "Purple ambient light", "Take me to the airport", "Sport mode, please"];
 
@@ -22,6 +23,7 @@ export function AssistantPanel({ voice }: { voice?: ReactNode }) {
   const { turns, status } = useAssistantStore();
   const driver = useDriverStore((s) => s.current);
   const [draft, setDraft] = useState("");
+  const [showMemory, setShowMemory] = useState(false);
   const log = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,18 +38,31 @@ export function AssistantPanel({ voice }: { voice?: ReactNode }) {
   };
 
   return (
-    <section className="glass flex w-full max-w-sm flex-col rounded-3xl p-4" aria-label="MIRA assistant">
+    <section className="border border-halogen/10 bg-floor/60 backdrop-blur-md backdrop-saturate-150 flex w-full max-w-sm flex-col rounded-3xl p-4" aria-label="MIRA assistant">
       <div className="flex items-center gap-3">
         <AssistantOrb status={status} />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="font-bold tracking-wide [font-stretch:115%]">MIRA</p>
           <p className="text-xs text-brushed" role="status" aria-live="polite">
             {status === "thinking" ? "Thinking…" : status === "listening" ? "Listening…" : status === "speaking" ? "Speaking…" : driver ? `Ready for you, ${driver.display_name}` : "Ready. Select a driver so I can remember you."}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowMemory((v) => !v)}
+          aria-pressed={showMemory}
+          className="rounded-full bg-halogen/8 px-3 py-1 text-xs hover:bg-halogen/15"
+        >
+          {showMemory ? "Chat" : "Memories"}
+        </button>
       </div>
 
-      <div ref={log} className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1 text-sm" aria-live="polite">
+      {showMemory && (
+        <div className="mt-3 max-h-56 overflow-y-auto pr-1">
+          <MemoryPanel />
+        </div>
+      )}
+      <div ref={log} hidden={showMemory} className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1 text-sm" aria-live="polite">
         {turns.length === 0 && (
           <div className="flex flex-wrap gap-1.5">
             {SUGGESTIONS.map((s) => (

@@ -2,14 +2,15 @@
 
 import { type FormEvent, type ReactNode, useState } from "react";
 import { useVehicleStore } from "@/stores/vehicleStore";
-import type { DrivingMode, VehicleCommand } from "@/types/vehicle";
+import type { DrivingMode, SceneName, VehicleCommand } from "@/types/vehicle";
 
 const SWATCHES = ["#5AA9FF", "#8A4DFF", "#FF5A8A", "#FF8A2D", "#2DFF8A", "#FFD9A8"];
 const MODES: DrivingMode[] = ["eco", "comfort", "sport", "sport_plus"];
+const SCENES: Array<[SceneName, string]> = [["relax", "Relax"], ["focus", "Focus"], ["sport", "Sport"], ["night", "Night"], ["cozy", "Cozy"]];
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="glass rounded-2xl p-4">
+    <section className="border border-halogen/10 bg-floor/60 backdrop-blur-md backdrop-saturate-150 rounded-2xl p-4">
       <h3 className="text-[10px] font-semibold tracking-[0.2em] text-brushed uppercase">{title}</h3>
       <div className="mt-2">{children}</div>
     </section>
@@ -69,6 +70,16 @@ export function CenterDisplay() {
         </div>
       </Card>
 
+      <Card title="Scenes">
+        <div className="flex flex-wrap gap-1.5">
+          {SCENES.map(([scene, label]) => (
+            <Pill key={scene} active={state.scene === scene} onClick={() => send({ type: "apply_scene", scene })}>
+              {label}
+            </Pill>
+          ))}
+        </div>
+      </Card>
+
       <Card title="Drive mode">
         <div className="flex flex-wrap gap-1.5">
           {MODES.map((mode) => (
@@ -116,12 +127,22 @@ export function CenterDisplay() {
       </Card>
 
       <Card title="Navigation">
+        {state.trip.arrived_at && !state.navigation.destination && (
+          <p className="mb-2 text-sm text-ambient">✓ Arrived at {state.trip.arrived_at}</p>
+        )}
         {state.navigation.destination ? (
           <div className="flex items-center justify-between gap-2 text-sm">
             <span className="truncate">
               {state.navigation.destination} · {state.navigation.eta_minutes} min
             </span>
-            <Pill onClick={() => send({ type: "clear_destination" })}>End</Pill>
+            {state.trip.active ? (
+              <Pill onClick={() => send({ type: "stop_trip" })}>Stop</Pill>
+            ) : (
+              <span className="flex gap-1.5">
+                <Pill active onClick={() => send({ type: "start_trip" })}>Drive</Pill>
+                <Pill onClick={() => send({ type: "clear_destination" })}>End</Pill>
+              </span>
+            )}
           </div>
         ) : (
           <form onSubmit={navigate} className="flex gap-2">
@@ -139,6 +160,11 @@ export function CenterDisplay() {
           </form>
         )}
       </Card>
+      {state.fuel.level_percent < 15 && !state.trip.active && (
+        <button type="button" onClick={() => send({ type: "refuel" })} className="border border-halogen/10 bg-floor/60 backdrop-blur-md backdrop-saturate-150 rounded-2xl p-3 text-sm text-[#FF8A2D]">
+          Fuel low ({Math.round(state.fuel.level_percent)}%) · Refuel
+        </button>
+      )}
       {error && <p className="text-xs text-[#FF8A8A]" role="alert">{error}</p>}
     </div>
   );

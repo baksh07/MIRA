@@ -23,6 +23,8 @@ interface AssistantStore {
   turns: ChatTurn[];
   status: AssistantStatus;
   error: string | null;
+  /** A voice session is open (MIRA then speaks proactive notices herself). */
+  voiceOn: boolean;
   setStatus: (status: AssistantStatus) => void;
   addTurn: (turn: Omit<ChatTurn, "id">) => void;
   /** Sends a typed message; the reply appears once the backend has answered. */
@@ -35,6 +37,7 @@ export const useAssistantStore = create<AssistantStore>()((set, get) => ({
   turns: [],
   status: "idle",
   error: null,
+  voiceOn: false,
 
   setStatus: (status) => set({ status }),
 

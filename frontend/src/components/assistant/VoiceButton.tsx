@@ -45,6 +45,7 @@ export function VoiceButton() {
     try {
       session.current = await startVoice(sessionId(), onEvent, (l) => setLevel((prev) => prev * 0.6 + l * 0.4));
       setState("on");
+      useAssistantStore.setState({ voiceOn: true });
       useAssistantStore.getState().setStatus("listening");
     } catch (error) {
       setState("off");
@@ -61,6 +62,7 @@ export function VoiceButton() {
     session.current = null;
     setState("off");
     setCaption("");
+    useAssistantStore.setState({ voiceOn: false });
     useAssistantStore.getState().setStatus("idle");
   };
 
