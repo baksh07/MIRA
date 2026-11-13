@@ -177,3 +177,58 @@ async def test_mcp_rejects_out_of_range_arguments() -> None:
             "set_seat_heating", {"vehicle_id": new_id(), "level": 9}, raise_on_error=False
         )
     assert result.is_error
+
+
+# --- Trips and scenes ------------------------------------------------------------
+
+from mira_backend.models.vehicle import ApplyScene, Refuel, SetDoor, StartTrip, StopTrip  # noqa: E402
+
+
+@pytest.mark.anyio
+async def test_trip_needs_a_destination_and_closed_doors() -> None:
+    car = VehicleSimulator(new_id())
+    with pytest.raises(ValueError):
+        await car.apply(StartTrip())
+    await car.apply(SetDestination(destination="Lake Starnberg"))
+    await car.apply(SetDoor(door="left", open=True))
+    with pytest.raises(ValueError):
+        await car.apply(StartTrip())
+
+
+@pytest.mark.anyio
+async def test_trip_drives_burns_fuel_and_arrives() -> None:
+    car = VehicleSimulator(new_id())
+    await car.apply(SetDestination(destination="Lake Starnberg"))
+    start = car.state
+    await car.apply(StartTrip())
+    for _ in range(600):
+        await car.tick(0.5)
+        if not car.state.trip.active:
+            break
+    end = car.state
+    assert end.trip.arrived_at == "Lake Starnberg" and end.trip.speed_kmh == 0
+    assert end.navigation.destination is None
+    assert end.fuel.level_percent < start.fuel.level_percent
+    with pytest.raises(ValueError):
+        await car.apply(StopTrip())
+
+
+@pytest.mark.anyio
+async def test_doors_cannot_open_and_tank_cannot_fill_while_driving() -> None:
+    car = VehicleSimulator(new_id())
+    await car.apply(SetDestination(destination="Zugspitze"))
+    await car.apply(StartTrip())
+    await car.tick(0.5)
+    assert car.state.trip.speed_kmh > 0
+    with pytest.raises(ValueError):
+        await car.apply(SetDoor(door="left", open=True))
+    with pytest.raises(ValueError):
+        await car.apply(Refuel())
+
+
+@pytest.mark.anyio
+async def test_scene_changes_everything_in_one_confirmed_update() -> None:
+    car = VehicleSimulator(new_id())
+    state = (await car.apply(ApplyScene(scene="sport"))).state
+    assert state.driving_mode == "sport_plus" and state.ambient_lighting.color == "#FF2D2D" and state.music.playing
+    assert state.version == 1 and state.scene == "sport"

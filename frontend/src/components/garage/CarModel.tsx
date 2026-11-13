@@ -8,6 +8,7 @@ import { type CarRig, rigCar } from "@/components/vehicle/carRig";
 import type { DoorSide } from "@/stores/garageStore";
 import { useVehicleStore } from "@/stores/vehicleStore";
 import { CarHotspots } from "./CarHotspots";
+import { DriveMotion } from "./DriveMotion";
 
 /**
  * Built by scripts/build-car-model.mjs from "BMW M2 g87 [Free]" by Black Snow
@@ -83,6 +84,7 @@ export function CarModel({ reducedMotion }: { reducedMotion: boolean }) {
       <primitive object={scene} />
       <DoorAnimator rig={rig} instant={reducedMotion} />
       <CabinLight />
+      <DriveMotion rig={rig} instant={reducedMotion} />
       <CarHotspots rig={rig} />
     </group>
   );

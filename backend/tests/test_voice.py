@@ -41,3 +41,21 @@ def test_voice_socket_refuses_bad_ids_and_missing_configuration() -> None:
     for vid in ("not-a-uuid", str(uuid.uuid4())):
         with pytest.raises(WebSocketDisconnect), client.websocket_connect(f"/ws/voice/{vid}") as ws:
             ws.receive_text()
+
+
+def test_proactive_messages_on_arrival_and_low_fuel() -> None:
+    from mira_backend.models.vehicle import VehicleState
+    from mira_backend.voice.pipeline import proactive_message
+
+    driving = VehicleState()
+    driving.trip.active = True
+    arrived = driving.model_copy(deep=True)
+    arrived.trip.active, arrived.trip.arrived_at = False, "Munich Airport"
+    assert "arrived at Munich Airport" in proactive_message(driving, arrived)
+
+    low = driving.model_copy(deep=True)
+    low.fuel.level_percent = 14.9
+    full = driving.model_copy(deep=True)
+    full.fuel.level_percent = 15.2
+    assert "fuel is down to 15 percent" in proactive_message(full, low)
+    assert proactive_message(low, low) is None

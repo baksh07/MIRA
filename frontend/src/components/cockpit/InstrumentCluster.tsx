@@ -10,17 +10,17 @@ export function InstrumentCluster() {
   const connection = useVehicleStore((s) => s.connection);
   if (!state) {
     return (
-      <div className="glass rounded-3xl px-6 py-4 text-sm text-brushed">
+      <div className="border border-halogen/10 bg-floor/60 backdrop-blur-md backdrop-saturate-150 rounded-3xl px-6 py-4 text-sm text-brushed">
         {connection === "offline" ? "Car systems offline — reconnecting…" : "Starting car systems…"}
       </div>
     );
   }
   const fuel = Math.round(state.fuel.level_percent);
   return (
-    <div className="glass flex items-center gap-6 rounded-3xl px-6 py-4" aria-label="Instrument cluster">
+    <div className="border border-halogen/10 bg-floor/60 backdrop-blur-md backdrop-saturate-150 flex items-center gap-6 rounded-3xl px-6 py-4" aria-label="Instrument cluster">
       <div className="text-center">
-        <p className="text-4xl font-black tabular-nums [font-stretch:115%]">0</p>
-        <p className="text-[10px] tracking-widest text-brushed">KM/H · P</p>
+        <p className="text-4xl font-black tabular-nums [font-stretch:115%]">{Math.round(state.trip.speed_kmh)}</p>
+        <p className="text-[10px] tracking-widest text-brushed">KM/H · {state.trip.active ? "D" : "P"}</p>
       </div>
       <div className="h-12 w-px bg-halogen/10" />
       <div>
@@ -52,6 +52,11 @@ export function InstrumentCluster() {
             <p className="text-brushed tabular-nums">
               {state.navigation.distance_km} km · {state.navigation.eta_minutes} min
             </p>
+            {state.trip.active && state.trip.total_km ? (
+              <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-halogen/10">
+                <div className="h-full rounded-full bg-ambient transition-[width] duration-500" style={{ width: `${100 - ((state.trip.remaining_km ?? 0) / state.trip.total_km) * 100}%` }} />
+              </div>
+            ) : null}
           </div>
         </>
       )}

@@ -41,6 +41,8 @@ from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPI
 
 from mira_backend.api.assistant import converse
 from mira_backend.core.config import get_settings
+from mira_backend.models.vehicle import VehicleState
+from mira_backend.services.vehicle_simulator import vehicles
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +134,32 @@ class MiraBrain(FrameProcessor):
             await self.push_frame(event("status", status="idle"))
 
 
+LOW_FUEL_PERCENT = 15
+
+
+def proactive_message(before: VehicleState, after: VehicleState) -> str | None:
+    """Things MIRA says without being asked, from confirmed state changes."""
+    if after.trip.arrived_at and not before.trip.arrived_at:
+        return f"We've arrived at {after.trip.arrived_at}. Hope you enjoyed the drive."
+    if after.fuel.level_percent < LOW_FUEL_PERCENT <= before.fuel.level_percent:
+        return f"Heads up: fuel is down to {after.fuel.level_percent:.0f} percent, about {after.fuel.range_km} kilometres of range."
+    if before.trip.active and not after.trip.active and not after.trip.arrived_at and after.fuel.level_percent <= 0:
+        return "We've run out of fuel, so I've stopped the car."
+    return None
+
+
+async def watch_vehicle(vehicle_id: UUID, task: "PipelineTask") -> None:
+    car = vehicles.get(str(vehicle_id))
+    before = car.state
+    async with car.subscribe() as updates:
+        while True:
+            after = await updates.get()
+            message = proactive_message(before, after)
+            before = after
+            if message:
+                await task.queue_frames([event("assistant", text=message, actions=[], memories=[]), TTSSpeakFrame(message)])
+
+
 async def run_voice_session(websocket: WebSocket, vehicle_id: UUID) -> None:
     settings = get_settings()
     transport = FastAPIWebsocketTransport(
@@ -171,5 +199,9 @@ async def run_voice_session(websocket: WebSocket, vehicle_id: UUID) -> None:
         await task.cancel()
 
     logger.info("voice session started for vehicle %s", str(vehicle_id)[:8])
-    await PipelineRunner(handle_sigint=False).run(task)
+    watcher = asyncio.create_task(watch_vehicle(vehicle_id, task))
+    try:
+        await PipelineRunner(handle_sigint=False).run(task)
+    finally:
+        watcher.cancel()
     logger.info("voice session ended for vehicle %s", str(vehicle_id)[:8])

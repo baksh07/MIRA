@@ -16,6 +16,8 @@ export interface VehicleState {
   fuel: { level_percent: number; range_km: number };
   windows: { front_left: number; front_right: number };
   doors: { left_open: boolean; right_open: boolean };
+  trip: { active: boolean; speed_kmh: number; remaining_km: number | null; total_km: number | null; arrived_at: string | null };
+  scene: string | null;
   version: number;
 }
 
@@ -29,7 +31,13 @@ export type VehicleCommand =
   | { type: "set_destination"; destination: string }
   | { type: "clear_destination" }
   | { type: "set_window"; window: "front_left" | "front_right" | "both"; percent_open: number }
-  | { type: "set_door"; door: "left" | "right"; open: boolean };
+  | { type: "set_door"; door: "left" | "right"; open: boolean }
+  | { type: "start_trip" }
+  | { type: "stop_trip" }
+  | { type: "refuel" }
+  | { type: "apply_scene"; scene: SceneName };
+
+export type SceneName = "relax" | "focus" | "sport" | "night" | "cozy";
 
 export interface CommandResult {
   ok: boolean;

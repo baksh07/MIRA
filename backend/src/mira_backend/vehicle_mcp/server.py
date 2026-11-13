@@ -12,6 +12,11 @@ from fastmcp import FastMCP
 from pydantic import Field
 
 from mira_backend.models.vehicle import (
+    ApplyScene,
+    Refuel,
+    SceneName,
+    StartTrip,
+    StopTrip,
     ClearDestination,
     ControlMusic,
     DrivingMode,
@@ -120,3 +125,28 @@ async def set_window(
 async def set_door(vehicle_id: VehicleId, door: Literal["left", "right"], open: bool) -> dict:
     """Open or close a door (the car is parked)."""
     return await _apply(vehicle_id, SetDoor(door=door, open=open))
+
+
+@mcp.tool
+async def start_drive(vehicle_id: VehicleId) -> dict:
+    """Start driving to the current navigation destination (a destination must be set; doors closed)."""
+    return await _apply(vehicle_id, StartTrip())
+
+
+@mcp.tool
+async def stop_drive(vehicle_id: VehicleId) -> dict:
+    """Pull over and stop the current drive."""
+    return await _apply(vehicle_id, StopTrip())
+
+
+@mcp.tool
+async def refuel(vehicle_id: VehicleId) -> dict:
+    """Fill the tank (only while stopped)."""
+    return await _apply(vehicle_id, Refuel())
+
+
+@mcp.tool
+async def apply_cabin_scene(vehicle_id: VehicleId, scene: SceneName) -> dict:
+    """Set a whole cabin mood at once: relax (tired, stressed), focus (work, calls), sport (fun, energetic),
+    night (late, dark), cozy (cold, rainy). Changes climate, lighting, music and drive mode together."""
+    return await _apply(vehicle_id, ApplyScene(scene=scene))

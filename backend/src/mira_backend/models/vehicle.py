@@ -62,6 +62,15 @@ class Doors(BaseModel):
     right_open: bool = False
 
 
+class Trip(BaseModel):
+    active: bool = False
+    speed_kmh: float = Field(0, ge=0)
+    remaining_km: float | None = None
+    total_km: float | None = None
+    time_scale: float = Field(1, ge=1, description="Simulated seconds per real second for this trip")
+    arrived_at: str | None = Field(None, description="Destination reached on the last trip")
+
+
 class VehicleState(BaseModel):
     climate: Climate = Field(default_factory=Climate)
     seat: Seat = Field(default_factory=Seat)
@@ -72,6 +81,8 @@ class VehicleState(BaseModel):
     fuel: Fuel = Field(default_factory=Fuel)
     windows: Windows = Field(default_factory=Windows)
     doors: Doors = Field(default_factory=Doors)
+    trip: Trip = Field(default_factory=Trip)
+    scene: str | None = Field(None, description="Last cabin scene applied")
     version: int = Field(0, description="Increments on every confirmed change")
 
 
@@ -137,6 +148,26 @@ class SetDoor(_Command):
     open: bool
 
 
+class StartTrip(_Command):
+    type: Literal["start_trip"] = "start_trip"
+
+
+class StopTrip(_Command):
+    type: Literal["stop_trip"] = "stop_trip"
+
+
+class Refuel(_Command):
+    type: Literal["refuel"] = "refuel"
+
+
+SceneName = Literal["relax", "focus", "sport", "night", "cozy"]
+
+
+class ApplyScene(_Command):
+    type: Literal["apply_scene"] = "apply_scene"
+    scene: SceneName
+
+
 VehicleCommand = Annotated[
     SetTemperature
     | SetFanSpeed
@@ -147,7 +178,11 @@ VehicleCommand = Annotated[
     | SetDestination
     | ClearDestination
     | SetWindow
-    | SetDoor,
+    | SetDoor
+    | StartTrip
+    | StopTrip
+    | Refuel
+    | ApplyScene,
     Field(discriminator="type"),
 ]
 
