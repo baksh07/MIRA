@@ -76,6 +76,18 @@ function CabinLight() {
 
 const scratchColor = new Color();
 
+/** Fades the body paint to the confirmed wrap colour. */
+function PaintSync({ rig, instant }: { rig: CarRig; instant: boolean }) {
+  useFrame((_, delta) => {
+    const color = useVehicleStore.getState().state?.paint_color;
+    if (!rig.paint || !color) return;
+    rig.paint.color.lerp(paintColor.set(color), instant ? 1 : Math.min(1, delta * 2.5));
+  });
+  return null;
+}
+
+const paintColor = new Color();
+
 /** The car, parked on the turntable, with working doors and hotspots. */
 export function CarModel({ reducedMotion }: { reducedMotion: boolean }) {
   const { scene, rig, offset } = useCar();
@@ -84,6 +96,7 @@ export function CarModel({ reducedMotion }: { reducedMotion: boolean }) {
       <primitive object={scene} />
       <DoorAnimator rig={rig} instant={reducedMotion} />
       <CabinLight />
+      <PaintSync rig={rig} instant={reducedMotion} />
       <DriveMotion rig={rig} instant={reducedMotion} />
       <CarHotspots rig={rig} />
     </group>

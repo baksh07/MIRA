@@ -256,3 +256,16 @@ def test_concurrency_limit_releases_slots() -> None:
     assert limit.acquire("a") and not limit.acquire("a")
     limit.release("a")
     assert limit.acquire("a")
+
+
+
+@pytest.mark.anyio
+async def test_paint_changes_when_parked_only() -> None:
+    from mira_backend.models.vehicle import SetPaint
+
+    car = VehicleSimulator(new_id())
+    assert (await car.apply(SetPaint(color="#1f4fd8"))).state.paint_color == "#1F4FD8"
+    await car.apply(SetDestination(destination="Stuttgart"))
+    await car.apply(StartTrip())
+    with pytest.raises(ValueError):
+        await car.apply(SetPaint(color="#111111"))

@@ -18,6 +18,7 @@ export interface VehicleState {
   doors: { left_open: boolean; right_open: boolean };
   trip: { active: boolean; speed_kmh: number; remaining_km: number | null; total_km: number | null; arrived_at: string | null };
   scene: string | null;
+  paint_color: string;
   version: number;
 }
 
@@ -32,6 +33,7 @@ export type VehicleCommand =
   | { type: "clear_destination" }
   | { type: "set_window"; window: "front_left" | "front_right" | "both"; percent_open: number }
   | { type: "set_door"; door: "left" | "right"; open: boolean }
+  | { type: "set_paint"; color: string }
   | { type: "start_trip" }
   | { type: "stop_trip" }
   | { type: "refuel" }

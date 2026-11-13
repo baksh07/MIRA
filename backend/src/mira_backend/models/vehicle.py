@@ -83,6 +83,7 @@ class VehicleState(BaseModel):
     doors: Doors = Field(default_factory=Doors)
     trip: Trip = Field(default_factory=Trip)
     scene: str | None = Field(None, description="Last cabin scene applied")
+    paint_color: HexColor = Field("#D90012", description="Exterior paint (a showroom wrap)")
     version: int = Field(0, description="Increments on every confirmed change")
 
 
@@ -148,6 +149,11 @@ class SetDoor(_Command):
     open: bool
 
 
+class SetPaint(_Command):
+    type: Literal["set_paint"] = "set_paint"
+    color: HexColor
+
+
 class StartTrip(_Command):
     type: Literal["start_trip"] = "start_trip"
 
@@ -179,6 +185,7 @@ VehicleCommand = Annotated[
     | ClearDestination
     | SetWindow
     | SetDoor
+    | SetPaint
     | StartTrip
     | StopTrip
     | Refuel

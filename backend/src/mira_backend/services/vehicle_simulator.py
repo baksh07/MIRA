@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 
 from mira_backend.models.vehicle import (
     ApplyScene,
+    SetPaint,
     Refuel,
     StartTrip,
     StopTrip,
@@ -177,6 +178,11 @@ class VehicleSimulator:
                 for target in targets:
                     setattr(state.windows, target, percent)
                 return f"{window.replace('_', ' ').capitalize()} window {'closed' if percent == 0 else f'{percent}% open'}"
+            case SetPaint(color=color):
+                if state.trip.active:
+                    raise ValueError("Pull over before changing the wrap")
+                state.paint_color = color.upper()
+                return f"Exterior wrap changed to {state.paint_color}"
             case StartTrip():
                 if not state.navigation.destination or state.navigation.distance_km is None:
                     raise ValueError("Set a destination before starting the drive")
