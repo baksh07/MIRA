@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # MIRA's voice: ElevenLabs when a key is set (TTS_PROVIDER=deepgram switches back).
     tts_provider: str = "elevenlabs"
     elevenlabs_api_key: str = ""
-    elevenlabs_voice_id: str = "EXAVITQu4vr4xnSDxMaL"  # "Sarah", a default ElevenLabs voice
+    elevenlabs_voice_id: str = "cgSgspJ2msm6clMCkdW9"  # "Jessica": warm, conversational default voice
     elevenlabs_model: str = "eleven_flash_v2_5"  # lowest latency
 
     supabase_url: str = ""

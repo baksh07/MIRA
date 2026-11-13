@@ -74,7 +74,8 @@ def make_tts(settings: Settings) -> ElevenLabsTTSService | DeepgramTTSService:
             api_key=settings.elevenlabs_api_key,
             sample_rate=OUT_RATE,
             settings=ElevenLabsTTSService.Settings(
-                voice=settings.elevenlabs_voice_id, model=settings.elevenlabs_model, stability=0.5, similarity_boost=0.75
+                voice=settings.elevenlabs_voice_id, model=settings.elevenlabs_model,
+                stability=0.4, similarity_boost=0.8, style=0.3,  # livelier, friendlier delivery
             ),
         )
     return DeepgramTTSService(api_key=settings.deepgram_api_key, voice=settings.deepgram_tts_voice, sample_rate=OUT_RATE)
