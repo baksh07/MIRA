@@ -1,9 +1,10 @@
 "use client";
 
-import { OrbitControls, useProgress } from "@react-three/drei";
-import { Canvas, useThree } from "@react-three/fiber";
-import { Suspense, useLayoutEffect, useState, useSyncExternalStore } from "react";
-import type { PerspectiveCamera } from "three";
+import { useProgress } from "@react-three/drei";
+import { Canvas } from "@react-three/fiber";
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
+import { useGarageStore } from "@/stores/garageStore";
+import { CameraRig, GARAGE_CAMERA_POSITION, GarageControls } from "./CameraRig";
 import { CarModel } from "./CarModel";
 import { GarageMessage } from "./GarageMessage";
 import { CarShadow, Showroom, type ShowroomColors, Spotlight } from "./Showroom";
@@ -29,28 +30,6 @@ function readShowroomColors(): ShowroomColors {
   return { wall: token("--color-wall", "#1b1e23"), floor: token("--color-floor", "#121418") };
 }
 
-/**
- * Keeps the car whole and clear of the page copy: shifted right on wide screens
- * (copy sits bottom-left), lifted up and zoomed out on narrow ones (copy sits
- * underneath, and a portrait view is too narrow for a car seen from the side).
- */
-function CarFraming() {
-  const getState = useThree((state) => state.get);
-  const size = useThree((state) => state.size);
-
-  useLayoutEffect(() => {
-    const camera = getState().camera as PerspectiveCamera;
-    const { width, height } = size;
-    camera.zoom = Math.min(1, Math.max(0.45, width / height / 1.75));
-    if (width >= 1024) camera.setViewOffset(width, height, -width * 0.22, height * 0.06, width, height);
-    else camera.setViewOffset(width, height, 0, height * 0.2, width, height);
-    camera.updateProjectionMatrix();
-    return () => camera.clearViewOffset();
-  }, [getState, size]);
-
-  return null;
-}
-
 function LoadingOverlay() {
   const { progress, errors } = useProgress();
   if (errors.length > 0) {
@@ -60,7 +39,36 @@ function LoadingOverlay() {
   return <GarageMessage>Bringing the car in… {Math.round(progress)}%</GarageMessage>;
 }
 
-/** The 3D garage: the car on its turntable, with orbit controls. Browser-only. */
+/** Shown while seated: how to look around and the way back out (also Escape). */
+function CockpitOverlay() {
+  const view = useGarageStore((state) => state.view);
+  const exitCockpit = useGarageStore((state) => state.exitCockpit);
+
+  useEffect(() => {
+    if (view !== "cockpit") return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") exitCockpit();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [view, exitCockpit]);
+
+  if (view !== "cockpit") return null;
+  return (
+    <div className="absolute inset-x-0 bottom-24 flex flex-col items-center gap-3 px-6 text-center">
+      <p className="text-sm text-brushed">Drag to look around the cabin.</p>
+      <button
+        type="button"
+        onClick={exitCockpit}
+        className="rounded-full border border-halogen/30 bg-floor/70 px-5 py-2 text-sm font-medium text-halogen backdrop-blur-sm transition-colors hover:border-ambient hover:text-ambient"
+      >
+        Leave the car <span className="text-brushed">(Esc)</span>
+      </button>
+    </div>
+  );
+}
+
+/** The 3D garage: the car on its turntable, with doors, hotspots and the cockpit. Browser-only. */
 export default function GarageCanvas() {
   const reducedMotion = usePrefersReducedMotion();
   const [colors] = useState(readShowroomColors);
@@ -69,30 +77,21 @@ export default function GarageCanvas() {
     <>
       <Canvas
         dpr={[1, 2]}
-        camera={{ position: [5.8, 1.6, 6.9], fov: 32, near: 0.1, far: 60 }}
+        camera={{ position: GARAGE_CAMERA_POSITION, fov: 32, near: 0.05, far: 60 }}
         aria-label="3D view of the car in the garage. Drag to orbit, scroll or pinch to zoom."
         role="img"
       >
-        <CarFraming />
         <Showroom colors={colors} />
         <Suspense fallback={null}>
-          <CarModel />
+          <CarModel reducedMotion={reducedMotion} />
+          <CameraRig instant={reducedMotion} />
           <CarShadow />
           <Spotlight animate={!reducedMotion} />
         </Suspense>
-        <OrbitControls
-          makeDefault
-          target={[0, 0.6, 0]}
-          enablePan={false}
-          minDistance={4.5}
-          maxDistance={11}
-          minPolarAngle={Math.PI * 0.2}
-          maxPolarAngle={Math.PI * 0.47}
-          autoRotate={!reducedMotion}
-          autoRotateSpeed={0.35}
-        />
+        <GarageControls instant={reducedMotion} />
       </Canvas>
       <LoadingOverlay />
+      <CockpitOverlay />
     </>
   );
 }

@@ -79,7 +79,7 @@ Installed versions (verified 2026-11-12): Next.js 16.4.6 (Turbopack), React 19.3
 
 3D work: before writing any three.js / React Three Fiber / drei code, load the installed `threejs-*` skills (from CloudAI-X/threejs-skills) — at minimum `threejs-react-three-fiber`, `threejs-loaders` and `threejs-shaders`, plus others relevant to the task. They target three r186, R3F 9.8 and drei 10.7; pinned exactly as three 0.186.1, @react-three/fiber 9.8.2, @react-three/drei 10.7.9.
 
-3D car model pipeline: the source download ("BMW M2 g87 [Free]" by Black Snow, CC BY 4.0) lives in `frontend/assets-src/m2-g87-source.glb` (git-ignored). `npm run build:model` (`frontend/scripts/build-car-model.mjs`, gltf-transform SDK) removes manufacturer branding, drops hidden drivetrain parts, converts textures to WebP and meshopt-compresses geometry into `frontend/public/models/coupe.glb` (~6 MB, ~251k triangles). Doors (`*_door_L/R`, `*_doorpanel_*`, `*_doorglass_*`), hood, trunk, the four wheels and the steering wheel stay separate nodes for Phase 3. Interior textures still contain small brand marks (dash screen, seat headrest, shifter, light internals) — clean them up when the cockpit is built. The attribution is required by the license and lives in the footer and README.
+3D car model pipeline: the source download ("BMW M2 g87 [Free]" by Black Snow, CC BY 4.0) lives in `frontend/assets-src/m2-g87-source.glb` (git-ignored). `npm run build:model` (`frontend/scripts/build-car-model.mjs`, gltf-transform SDK) removes manufacturer branding, drops hidden drivetrain parts, converts textures to WebP and meshopt-compresses geometry into `frontend/public/models/coupe.glb` (~6 MB, ~251k triangles). Doors (`*_door_L/R`, `*_doorpanel_*`, `*_doorglass_*`), hood, trunk, the four wheels and the steering wheel stay separate nodes for Phase 3. Both dash displays are blanked to black (MIRA draws its own UI there); interior logos and M-colour stitching are removed via `TEXTURE_EDITS`. Remaining minor marks: faint tyre sidewall text and "BMW LED" text inside the light-housing texture. The attribution is required by the license and lives in the footer and README.
 
 Frontend design tokens live in `frontend/src/app/globals.css` (`@theme`): `wall`, `floor`, `concrete`, `halogen`, `brushed`, `ambient`. `ambient` is the car's ambient-lighting colour and the only accent; it will later be driven by vehicle state. Typeface: Archivo (variable, `wdth` axis) — the MIRA wordmark uses `[font-stretch:125%]`.
 
@@ -99,8 +99,9 @@ Backend tooling: Python 3.12 managed with **uv** (`pyproject.toml` + `uv.lock`, 
 | Technology | Responsibility |
 |---|---|
 | Pipecat | Real-time voice pipeline |
-| Deepgram | Speech recognition |
-| ElevenLabs | Speech generation |
+| Deepgram | Speech recognition and speech generation (Aura TTS) — ElevenLabs dropped by user decision 2026-11-13 |
+
+LLM for the agent (user decision 2026-11-13): **Groq primary, OpenAI as automatic fallback** when a Groq call fails. Keys in `backend/.env` (`GROQ_API_KEY`, `OPENAI_API_KEY`). Groq models: `GROQ_MODELS=openai/gpt-oss-20b,openai/gpt-oss-120b,qwen/qwen3.8-27b`, tried in order. Each model has its own free quota (measured from response headers: 1000 requests/day, 8000 tokens/min per model). On a 429 or an error the next model takes over; OpenAI is the final fallback. The user asked for `llama-3.1-8b-instant`, but it is retired on Groq (404 model_not_found); all three models above passed a live tool-calling test (~0.4 s). Keep agent calls lean (tokens/min is the tighter limit): one LLM call per command where possible, compact prompts, and memory extraction batched at the end of a session.
 
 Pipecat is responsible for audio processing and real-time voice transport.
 
@@ -395,6 +396,10 @@ Requirements:
 - Avoid treating an uncertain recognition result as confirmed identity.
 
 For the initial MVP, manual driver selection should be implemented first.
+
+**Current decision (user, 2026-11-13): recognition is simulated.** Two demo characters (one male, one female). Selecting a character shows a "Recognizing face…" step, then "identifies" that character. No camera access and no biometric processing at all; real recognition is a later phase.
+
+Deployment target (user, 2026-11-13): Supabase cloud, plus a public deployed site the user can send to their professor.
 
 Face recognition can be introduced after the profile system works reliably.
 
@@ -960,11 +965,15 @@ Agent:
 Run from `frontend/`:
 
 ```bash
-npx tsc --noEmit   # type check
-npm run lint       # ESLint
-npm run build      # production build
-npm run dev        # dev server (http://localhost:3000)
+npx tsc --noEmit     # type check
+npm run lint         # ESLint (React Compiler rules: mutate three.js objects in module functions or useFrame state, not hook return values)
+npm test             # Vitest unit tests (src/**/*.test.ts)
+npm run build        # production build
+npm run dev          # dev server (http://localhost:3000)
+npm run build:model  # rebuild public/models/coupe.glb from assets-src/
 ```
+
+Known dev-only console error: "Attempted to synchronously unmount a root while React was already rendering" comes from drei `Html` under React StrictMode's double-mount; it does not occur in the production build (verified 2026-11-13).
 
 ### Backend verification commands
 
@@ -1245,20 +1254,29 @@ This section should be updated as development progresses.
 - Phase 1 merged into `dev` (PRs #1 project initialization, #2 backend foundation, #3 app shell).
 - Phase 2 (3D virtual garage) built on `feature/3d-garage` (2026-11-13): full-bleed R3F scene behind the page chrome (lazy-loaded, `ssr: false`, error boundary, loading progress), debranded M2 model on a reflective studio floor with fog, softbox environment reflections, contact shadow, overhead spotlight with switch-on flicker, orbit controls (no pan, limited polar/zoom, slow auto-rotate off under reduced motion), responsive framing. Verified 2026-11-13: `tsc`, lint, build pass; rendered with no console errors at 390×844, 1024×768, 1440×900, 1920×1080; drag-to-orbit works.
 
+- Phase 2 merged into `dev` (PR #4).
+- Phase 3a (vehicle interaction) on `feature/vehicle-interaction` (2026-11-13):
+  - `components/vehicle/carRig.ts` adds hinge pivots on each door's front edge (door shell, inner panel and glass reparented with `attach`) and derives the seat pose from the steering wheel.
+  - Door hotspots ride on the doors via R3F `createPortal`; a "Get in" hotspot appears in the open driver's doorway. Hotspots are drei `Html` buttons, hidden when their side faces away.
+  - `components/garage/CameraRig.tsx` moves the camera along waypoints (door → seat and back), blends the garage/cockpit framing, and switches the controls to seated look-around. Leave with the button or Escape.
+  - `stores/garageStore.ts` (Zustand) holds the view mode, the turntable-stop flag and the visual-only door state. Door state moves to the simulator in Phase 6.
+  - The model build blanks the branded dash displays and removes interior logos and M-colour stitching.
+  - Vitest added; store tests pass. Verified in dev and production builds at 1440×900 and 390×844.
+
 ## Pending
 
-- Open PR `feature/3d-garage` → `dev`.
-- Phase 3: door hotspots and opening (hinge pivots computed from door bounds), garage-to-cockpit camera transition, cockpit/dashboard UI.
+- PR `feature/vehicle-interaction` → `dev`.
+- Phase 3b: cockpit displays. Draw MIRA's own instrument cluster and centre screen on the blanked dash screens (`*_digidash_screen` material), fed by a typed vehicle-state model with a clearly marked fixture until the Phase 6 simulator exists.
 
 ## Current Git Branch
 
 ```text
-feature/3d-garage
+feature/vehicle-interaction
 ```
 
 ## Next Immediate Milestone
 
-Merge Phase 2 into `dev`, then start Phase 3 (vehicle interaction and cockpit) on `feature/vehicle-interaction`.
+Phase 3b: cockpit instrument cluster and centre display.
 
 ---
 

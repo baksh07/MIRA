@@ -22,6 +22,8 @@
 }
 
 body {
+  /* Nothing may widen the page sideways; the 3D scene is sized to the viewport. */
+  overflow-x: clip;
   background-color: var(--color-floor);
   color: var(--color-halogen);
 }

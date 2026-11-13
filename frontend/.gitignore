@@ -42,3 +42,6 @@ next-env.d.ts
 
 # raw 3D source files (licensed downloads, rebuilt into public/models by scripts/build-car-model.mjs)
 /assets-src/
+
+# keep the placeholder template
+!.env.example
