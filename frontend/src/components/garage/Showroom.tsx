@@ -14,7 +14,7 @@ export interface ShowroomColors {
  * The studio around the car: a polished floor that fades into the back wall,
  * softbox reflections for the paint, and the overhead spotlight.
  */
-export function Showroom({ colors }: { colors: ShowroomColors }) {
+export function Showroom({ colors, lowPower = false }: { colors: ShowroomColors; lowPower?: boolean }) {
   return (
     <>
       <color attach="background" args={[colors.wall]} />
@@ -33,8 +33,10 @@ export function Showroom({ colors }: { colors: ShowroomColors }) {
         <planeGeometry args={[60, 60]} />
         <MeshReflectorMaterial
           color={colors.floor}
-          resolution={1024}
-          blur={[400, 120]}
+          // Re-created at a lower resolution when the device struggles.
+          key={lowPower ? "low" : "high"}
+          resolution={lowPower ? 256 : 1024}
+          blur={lowPower ? [200, 60] : [400, 120]}
           mixBlur={1}
           mixStrength={12}
           depthScale={1.1}
