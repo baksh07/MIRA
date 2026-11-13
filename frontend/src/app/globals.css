@@ -28,6 +28,29 @@ body {
   color: var(--color-halogen);
 }
 
+/* Cockpit glass panels (a Tailwind v4 utility, so it composes with other classes). */
+@utility glass {
+  border: 1px solid rgb(238 240 242 / 0.1);
+  background-color: rgb(18 20 24 / 0.62);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+
+/* MIRA's orb: breathes when idle, pulses while thinking or speaking. */
+@keyframes orb-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+@keyframes orb-active {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+.orb { animation: orb-breathe 4s ease-in-out infinite; }
+.orb[data-status="thinking"], .orb[data-status="speaking"], .orb[data-status="listening"] { animation: orb-active 0.9s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .orb, .orb[data-status] { animation: none; }
+}
+
 /* Simulated face scan: a sweeping scan line and landmarks lighting up. */
 @keyframes scanline {
   from { transform: translateY(-3rem); }

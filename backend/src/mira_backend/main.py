@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from mira_backend.api.assistant import router as assistant_router
 from mira_backend.api.drivers import router as drivers_router
 from mira_backend.api.health import router as health_router
 from mira_backend.api.vehicle import router as vehicle_router
@@ -46,4 +47,5 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(vehicle_router)
 app.include_router(drivers_router)
+app.include_router(assistant_router)
 app.mount("/mcp", mcp_app)

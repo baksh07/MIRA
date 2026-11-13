@@ -2,8 +2,8 @@
 
 import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useMemo } from "react";
-import { Box3, MathUtils, type Object3D, Vector3 } from "three";
+import { useMemo, useRef } from "react";
+import { Box3, Color, MathUtils, type Object3D, type PointLight, Vector3 } from "three";
 import { type CarRig, rigCar } from "@/components/vehicle/carRig";
 import type { DoorSide } from "@/stores/garageStore";
 import { useVehicleStore } from "@/stores/vehicleStore";
@@ -61,6 +61,20 @@ function DoorAnimator({ rig, instant }: { rig: CarRig; instant: boolean }) {
   return null;
 }
 
+/** Interior ambient lighting: follows the confirmed colour and brightness of the car's state. */
+function CabinLight() {
+  const light = useRef<PointLight>(null);
+  useFrame((_, delta) => {
+    const ambient = useVehicleStore.getState().state?.ambient_lighting;
+    if (!light.current || !ambient) return;
+    light.current.color.lerp(scratchColor.set(ambient.color), Math.min(1, delta * 4));
+    light.current.intensity = MathUtils.damp(light.current.intensity, (ambient.brightness / 100) * 2.5, 4, delta);
+  });
+  return <pointLight ref={light} position={[0, 0.95, -0.25]} distance={1.8} decay={2} intensity={0} />;
+}
+
+const scratchColor = new Color();
+
 /** The car, parked on the turntable, with working doors and hotspots. */
 export function CarModel({ reducedMotion }: { reducedMotion: boolean }) {
   const { scene, rig, offset } = useCar();
@@ -68,6 +82,7 @@ export function CarModel({ reducedMotion }: { reducedMotion: boolean }) {
     <group position={offset}>
       <primitive object={scene} />
       <DoorAnimator rig={rig} instant={reducedMotion} />
+      <CabinLight />
       <CarHotspots rig={rig} />
     </group>
   );
