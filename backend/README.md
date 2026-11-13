@@ -118,3 +118,15 @@ per request around the caller's car and driver.
 
 Local dev server on Windows: `uv run python -m mira_backend.devserver` (selects the event
 loop psycopg needs on Windows).
+
+## Voice (Phase 7)
+
+`voice/pipeline.py` (Pipecat): WebSocket transport → Deepgram STT (nova-3) → `MiraBrain`
+(calls the same `converse()` agent as text chat) → Deepgram TTS (Aura 2) → WebSocket.
+Wire protocol (`MiraWireSerializer`): client sends 16 kHz PCM16 binary; server sends 24 kHz
+PCM16 binary plus JSON events (`status`, `interim`, `user`, `assistant`, `interrupt`, `error`).
+Talking over MIRA sends `interrupt` and the client stops playback.
+
+- `WS /ws/voice/{vehicle_id}` · `GET /api/voice/status`
+- Verified end to end: synthesised speech streamed in real time → transcribed → tool call → spoken reply;
+  and in Chrome with a fake microphone (AudioWorklet capture → pipeline → car state changed).

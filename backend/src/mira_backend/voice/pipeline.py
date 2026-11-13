@@ -1,0 +1,175 @@
+"""MIRA's voice pipeline (Pipecat).
+
+    browser mic ─PCM16─▶ WebSocket ─▶ Deepgram STT ─▶ MiraBrain ─▶ Deepgram TTS ─▶ WebSocket ─PCM16─▶ speaker
+                                                          │
+                                                 converse() = the LangGraph agent
+
+Pipecat owns audio and transport; the agent owns understanding and actions
+(the same `converse` the text chat uses). The wire protocol is deliberately
+small so the browser client stays tiny:
+
+  client → server   binary: 16 kHz mono PCM16 microphone audio
+  server → client   binary: 24 kHz mono PCM16 speech
+                    text:   JSON events {type: status|interim|user|assistant|interrupt|error, ...}
+"""
+
+import asyncio
+import json
+import logging
+from uuid import UUID
+
+from fastapi import HTTPException, WebSocket
+from pipecat.frames.frames import (
+    BotStartedSpeakingFrame,
+    BotStoppedSpeakingFrame,
+    Frame,
+    InputAudioRawFrame,
+    InterimTranscriptionFrame,
+    OutputAudioRawFrame,
+    OutputTransportMessageFrame,
+    TranscriptionFrame,
+    TTSSpeakFrame,
+)
+from pipecat.pipeline.pipeline import Pipeline
+from pipecat.pipeline.runner import PipelineRunner
+from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
+from pipecat.serializers.base_serializer import FrameSerializer
+from pipecat.services.deepgram.stt import DeepgramSTTService, LiveOptions
+from pipecat.services.deepgram.tts import DeepgramTTSService
+from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPIWebsocketTransport
+
+from mira_backend.api.assistant import converse
+from mira_backend.core.config import get_settings
+
+logger = logging.getLogger(__name__)
+
+IN_RATE = 16_000
+OUT_RATE = 24_000
+# Deepgram may split one spoken request into several final segments; wait this
+# long after the last one before answering.
+TURN_GAP_SECONDS = 0.8
+
+
+class MiraWireSerializer(FrameSerializer):
+    """Raw PCM16 audio both ways, plus JSON events (see module docstring)."""
+
+    async def serialize(self, frame: Frame) -> str | bytes | None:
+        if isinstance(frame, OutputAudioRawFrame):
+            return frame.audio
+        if isinstance(frame, OutputTransportMessageFrame):
+            return json.dumps(frame.message)
+        return None
+
+    async def deserialize(self, data: str | bytes) -> Frame | None:
+        if isinstance(data, bytes) and data:
+            return InputAudioRawFrame(audio=data, sample_rate=IN_RATE, num_channels=1)
+        return None
+
+
+def event(kind: str, **fields: object) -> OutputTransportMessageFrame:
+    return OutputTransportMessageFrame(message={"type": kind, **fields})
+
+
+class MiraBrain(FrameProcessor):
+    """Turns finished utterances into agent turns and the replies into speech."""
+
+    def __init__(self, vehicle_id: UUID) -> None:
+        super().__init__()
+        self._vehicle_id = vehicle_id
+        self._parts: list[str] = []
+        self._pending: asyncio.Task[None] | None = None
+        self._bot_speaking = False
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
+        await super().process_frame(frame, direction)
+        if isinstance(frame, TranscriptionFrame):
+            if frame.text.strip():
+                self._parts.append(frame.text.strip())
+                self._schedule()
+            return
+        if isinstance(frame, InterimTranscriptionFrame):
+            if frame.text.strip():
+                await self.push_frame(event("interim", text=frame.text.strip()))
+                if self._bot_speaking:
+                    # Barge-in: the driver talks over MIRA; the client stops playback.
+                    await self.push_frame(event("interrupt"))
+                if self._pending:
+                    self._pending.cancel()  # still talking: wait for the end of the utterance
+            return
+        if isinstance(frame, BotStartedSpeakingFrame):
+            self._bot_speaking = True
+            await self.push_frame(event("status", status="speaking"))
+        elif isinstance(frame, BotStoppedSpeakingFrame):
+            self._bot_speaking = False
+            await self.push_frame(event("status", status="idle"))
+        await self.push_frame(frame, direction)
+
+    def _schedule(self) -> None:
+        if self._pending:
+            self._pending.cancel()
+        self._pending = asyncio.create_task(self._respond_after_gap())
+
+    async def _respond_after_gap(self) -> None:
+        try:
+            await asyncio.sleep(TURN_GAP_SECONDS)
+        except asyncio.CancelledError:
+            return
+        text = " ".join(self._parts).strip()
+        self._parts.clear()
+        if not text:
+            return
+        await self.push_frame(event("user", text=text))
+        await self.push_frame(event("status", status="thinking"))
+        try:
+            result = await converse(self._vehicle_id, text[:500])
+            await self.push_frame(
+                event("assistant", text=result.reply, actions=[a["message"] for a in result.actions if a["ok"]], memories=result.memories)
+            )
+            await self.push_frame(TTSSpeakFrame(result.reply))
+        except HTTPException as error:
+            await self.push_frame(event("error", message=str(error.detail)))
+            await self.push_frame(event("status", status="idle"))
+
+
+async def run_voice_session(websocket: WebSocket, vehicle_id: UUID) -> None:
+    settings = get_settings()
+    transport = FastAPIWebsocketTransport(
+        websocket=websocket,
+        params=FastAPIWebsocketParams(
+            audio_in_enabled=True,
+            audio_in_sample_rate=IN_RATE,
+            audio_out_enabled=True,
+            audio_out_sample_rate=OUT_RATE,
+            add_wav_header=False,
+            serializer=MiraWireSerializer(),
+            session_timeout=15 * 60,
+        ),
+    )
+    stt = DeepgramSTTService(
+        api_key=settings.deepgram_api_key,
+        sample_rate=IN_RATE,
+        live_options=LiveOptions(
+            model=settings.deepgram_stt_model, language="en-US", smart_format=True,
+            punctuate=True, interim_results=True, endpointing=300,
+        ),
+    )
+    tts = DeepgramTTSService(api_key=settings.deepgram_api_key, voice=settings.deepgram_tts_voice, sample_rate=OUT_RATE)
+    pipeline = Pipeline([transport.input(), stt, MiraBrain(vehicle_id), tts, transport.output()])
+    task = PipelineTask(
+        pipeline,
+        params=PipelineParams(audio_in_sample_rate=IN_RATE, audio_out_sample_rate=OUT_RATE),
+        idle_timeout_secs=10 * 60,
+    )
+
+    @transport.event_handler("on_client_connected")
+    async def on_connected(_transport: object, _client: object) -> None:
+        await task.queue_frames([event("status", status="idle")])
+
+    @transport.event_handler("on_client_disconnected")
+    async def on_disconnected(_transport: object, _client: object) -> None:
+        await task.cancel()
+
+    logger.info("voice session started for vehicle %s", str(vehicle_id)[:8])
+    await PipelineRunner(handle_sigint=False).run(task)
+    logger.info("voice session ended for vehicle %s", str(vehicle_id)[:8])
