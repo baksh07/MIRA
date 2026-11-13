@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { postJson, sessionId } from "@/lib/api";
+import { API_URL, postJson, sessionId } from "@/lib/api";
+import type { HabitOffer } from "@/lib/habits";
 import { speak, stopSpeaking } from "@/lib/speech";
 
 export interface ChatTurn {
@@ -9,6 +10,8 @@ export interface ChatTurn {
   /** Confirmed changes the assistant made in this turn. */
   actions?: string[];
   memories?: string[];
+  /** A habit MIRA offers to remember; cleared once answered. */
+  offer?: HabitOffer;
 }
 
 export type AssistantStatus = "idle" | "listening" | "thinking" | "speaking" | "error";
@@ -33,6 +36,9 @@ interface AssistantStore {
   say: (text: string) => void;
   setStatus: (status: AssistantStatus) => void;
   addTurn: (turn: Omit<ChatTurn, "id">) => void;
+  /** Saves an offered habit as the driver's preference (confirmed by the backend). */
+  acceptOffer: (turnId: number) => Promise<void>;
+  dismissOffer: (turnId: number) => void;
   /** Sends a typed message; the reply appears once the backend has answered. */
   ask: (text: string) => Promise<ChatResponse | null>;
 }
@@ -58,6 +64,28 @@ export const useAssistantStore = create<AssistantStore>()((set, get) => ({
   setStatus: (status) => set({ status }),
 
   addTurn: (turn) => set((state) => ({ turns: [...state.turns.slice(-30), { ...turn, id: nextId++ }] })),
+
+  acceptOffer: async (turnId) => {
+    const turn = get().turns.find((t) => t.id === turnId);
+    if (!turn?.offer) return;
+    const { key, value } = turn.offer;
+    get().dismissOffer(turnId);
+    try {
+      const response = await fetch(`${API_URL}/api/sessions/${sessionId()}/preferences/${key}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value }),
+      });
+      if (!response.ok) throw new Error(String(response.status));
+      get().addTurn({ role: "assistant", text: "Done. I'll set it up that way next time.", memories: [`Preference ${key} = ${value}`] });
+      get().say("Done. I'll set it up that way next time.");
+    } catch {
+      get().addTurn({ role: "assistant", text: "Sorry, I couldn't save that preference." });
+    }
+  },
+
+  dismissOffer: (turnId) =>
+    set((state) => ({ turns: state.turns.map((t) => (t.id === turnId ? { ...t, offer: undefined } : t)) })),
 
   ask: async (text) => {
     const message = text.trim();

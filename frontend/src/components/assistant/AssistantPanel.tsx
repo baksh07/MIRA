@@ -88,6 +88,16 @@ export function AssistantPanel({ voice }: { voice?: ReactNode }) {
             {turn.actions?.map((a) => (
               <p key={a} className="mt-1 text-xs text-brushed">✓ {a}</p>
             ))}
+            {turn.offer && (
+              <div className="mt-1.5 flex gap-1.5">
+                <button type="button" onClick={() => void useAssistantStore.getState().acceptOffer(turn.id)} className="rounded-full bg-ambient px-3 py-1 text-xs font-semibold text-floor">
+                  Yes, remember
+                </button>
+                <button type="button" onClick={() => useAssistantStore.getState().dismissOffer(turn.id)} className="rounded-full bg-halogen/8 px-3 py-1 text-xs">
+                  Not now
+                </button>
+              </div>
+            )}
             {turn.memories?.map((m) => (
               <p key={m} className="mt-1 text-xs text-ambient">◆ Remembered: {m}</p>
             ))}
