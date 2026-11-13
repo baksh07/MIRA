@@ -7,6 +7,7 @@ session here, on the server: the client never chooses whose memories it reads.
 """
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -75,6 +76,14 @@ class SessionService:
         greeting = f"Welcome back, {name}. I've set things up the way you like them." if applied else f"Hello, {name}."
         logger.info("session %s: %s identified in vehicle %s", str(record.id)[:8], name, str(vehicle_id)[:8])
         return SessionStarted(session_id=record.id, driver=record.driver, applied=applied, greeting=greeting)
+
+    async def record_arrival(self, vehicle_id: str, destination: str) -> None:
+        """Episodic memory: the identified driver remembers where they drove."""
+        record = self._active.get(vehicle_id)
+        if record is None:
+            return
+        day = datetime.now(UTC).strftime("%d %b %Y")
+        await self.repo.add_memory(record.driver.id, "episodic", f"Drove to {destination} on {day}.")
 
     async def leave(self, vehicle_id: UUID | str) -> None:
         record = self._active.pop(str(vehicle_id), None)

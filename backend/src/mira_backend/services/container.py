@@ -13,6 +13,7 @@ from mira_backend.services.driver_repository import (
     PostgresDriverRepository,
 )
 from mira_backend.services.sessions import SessionService
+from mira_backend.services.vehicle_simulator import vehicles
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class Container:
 
 
 _container = Container(InMemoryDriverRepository())
+vehicles.arrival_listeners.append(lambda vid, dest: _container.sessions.record_arrival(vid, dest))
 
 
 def container() -> Container:
@@ -39,6 +41,7 @@ async def startup() -> None:
     repo = PostgresDriverRepository(url)
     await repo.open()
     _container = Container(repo)
+    vehicles.arrival_listeners[:] = [lambda vid, dest: _container.sessions.record_arrival(vid, dest)]
     logger.info("driver repository: Supabase Postgres")
 
 

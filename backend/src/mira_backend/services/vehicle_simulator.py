@@ -7,6 +7,7 @@ notifies subscribers (the WebSocket that keeps the cockpit in sync).
 """
 
 import asyncio
+from collections.abc import Awaitable, Callable
 import hashlib
 import math
 import logging
@@ -263,6 +264,8 @@ class VehicleRegistry:
         self._vehicles: dict[str, VehicleSimulator] = {}
         self._max = max_vehicles
         self._idle = idle_seconds
+        # Called with (vehicle_id, destination) when a trip arrives.
+        self.arrival_listeners: list[Callable[[str, str], Awaitable[None]]] = []
 
     def get(self, vehicle_id: str) -> VehicleSimulator:
         vehicle = self._vehicles.get(vehicle_id)
@@ -287,6 +290,10 @@ class VehicleRegistry:
             for vehicle in [v for v in self._vehicles.values() if v._state.trip.active]:
                 try:
                     await vehicle.tick(interval)
+                    arrived = vehicle._state.trip.arrived_at
+                    if arrived and not vehicle._state.trip.active:
+                        for listener in self.arrival_listeners:
+                            await listener(vehicle.vehicle_id, arrived)
                 except Exception:  # noqa: BLE001 - one bad vehicle must not stop the others
                     logger.exception("trip tick failed for %s", vehicle.vehicle_id[:8])
 
