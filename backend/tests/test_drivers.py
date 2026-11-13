@@ -225,3 +225,18 @@ async def test_onboarding_saves_only_the_asked_setting_and_never_a_for_now_chang
     # Asked about temperature and answered: saved as her usual.
     await keep_onboarding_settings(repo, sophia, state, log, 1, "Twenty degrees is perfect")
     assert (await repo.get_preferences(sophia.id))["temperature_c"] == 20.0
+
+
+@pytest.mark.anyio
+async def test_a_new_visit_closes_the_drivers_previous_open_session() -> None:
+    import uuid as _uuid
+
+    from mira_backend.services.driver_repository import InMemoryDriverRepository
+    from mira_backend.services.sessions import SessionService
+
+    repo = InMemoryDriverRepository()
+    daniel = next(d for d in repo.drivers.values() if d.slug == "daniel")
+    service = SessionService(repo)
+    first = await service.identify(_uuid.uuid4(), daniel.id)  # then the page is reloaded: a new car
+    second = await service.identify(_uuid.uuid4(), daniel.id)
+    assert first.session_id in repo.ended and second.session_id not in repo.ended
