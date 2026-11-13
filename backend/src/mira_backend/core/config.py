@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_models: str = "openai/gpt-oss-20b,openai/gpt-oss-120b,qwen/qwen3.8-27b"
     openai_api_key: str = ""
-    openai_model: str = "gpt-5-mini"
+    openai_models: str = "gpt-4.1-mini,gpt-5-mini"  # primary; tried in order before Groq
 
     deepgram_api_key: str = ""
     deepgram_stt_model: str = "nova-3"
@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     frontend_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3123"
     # Regex for preview deployments (e.g. Vercel preview URLs).
     frontend_origin_regex: str = Field(default=r"https://mira[a-z0-9-]*\.vercel\.app")
+
+    @property
+    def openai_model_list(self) -> list[str]:
+        return [m.strip() for m in self.openai_models.split(",") if m.strip()]
 
     @property
     def groq_model_list(self) -> list[str]:

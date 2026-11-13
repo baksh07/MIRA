@@ -10,6 +10,7 @@ export type VoiceEvent =
   | { type: "status"; status: "idle" | "thinking" | "speaking" | "listening"; seconds?: number }
   | { type: "interim"; text: string }
   | { type: "standby"; text: string }
+  | { type: "progress"; text: string }
   | { type: "user"; text: string }
   | { type: "assistant"; text: string; actions: string[]; memories: string[] }
   | { type: "interrupt" }
@@ -48,6 +49,8 @@ registerProcessor("mic-capture", MicCapture);
 
 export interface VoiceSession {
   stop: () => void;
+  /** Muted: the microphone sends silence (the connection stays open). */
+  setMuted: (muted: boolean) => void;
 }
 
 export async function startVoice(
@@ -74,7 +77,8 @@ export async function startVoice(
   // Gapless playback of streamed speech; cancellable for barge-in.
   let playhead = 0;
   // After a barge-in, drop speech still in flight until MIRA's next reply.
-  let muted = false;
+  let dropping = false;
+  let micMuted = false;
   const playing = new Set<AudioBufferSourceNode>();
   const stopPlayback = () => {
     for (const node of playing) node.stop();
@@ -97,21 +101,22 @@ export async function startVoice(
   };
 
   capture.port.onmessage = (message: MessageEvent<{ pcm: ArrayBuffer; level: number }>) => {
-    onLevel(message.data.level);
-    if (socket.readyState === WebSocket.OPEN) socket.send(message.data.pcm);
+    onLevel(micMuted ? 0 : message.data.level);
+    if (socket.readyState !== WebSocket.OPEN) return;
+    socket.send(micMuted ? new ArrayBuffer(message.data.pcm.byteLength) : message.data.pcm);
   };
 
   socket.onmessage = (message) => {
     if (message.data instanceof ArrayBuffer) {
-      if (!muted) play(message.data);
+      if (!dropping) play(message.data);
       return;
     }
     const event = JSON.parse(message.data as string) as VoiceEvent;
     if (event.type === "interrupt") {
-      muted = true;
+      dropping = true;
       stopPlayback();
     }
-    if (event.type === "assistant") muted = false;
+    if (event.type === "assistant" || event.type === "progress") dropping = false;
     onEvent(event);
   };
   socket.onclose = (close) => {
@@ -124,6 +129,9 @@ export async function startVoice(
   });
 
   return {
+    setMuted: (value) => {
+      micMuted = value;
+    },
     stop: () => {
       stopPlayback();
       socket.close(1000);

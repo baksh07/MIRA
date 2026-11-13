@@ -18,7 +18,15 @@ GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 
 def chat_models(settings: Settings) -> list[tuple[str, BaseChatModel]]:
+    """OpenAI first (fast, no daily quota), then Groq's free models as a fallback."""
     models: list[tuple[str, BaseChatModel]] = []
+    if settings.openai_api_key:
+        for name in settings.openai_model_list:
+            # gpt-5 models reason by default (seconds); minimal effort keeps voice replies snappy.
+            extra = {"reasoning_effort": "minimal"} if name.startswith("gpt-5") else {"temperature": 0.3}
+            models.append(
+                (f"openai:{name}", ChatOpenAI(model=name, api_key=settings.openai_api_key, max_retries=0, timeout=20, **extra))
+            )
     if settings.groq_api_key:
         for name in settings.groq_model_list:
             models.append(
@@ -30,10 +38,6 @@ def chat_models(settings: Settings) -> list[tuple[str, BaseChatModel]]:
                     ),
                 )
             )
-    if settings.openai_api_key:
-        models.append(
-            (f"openai:{settings.openai_model}", ChatOpenAI(model=settings.openai_model, api_key=settings.openai_api_key, max_retries=0, timeout=40))
-        )
     return models
 
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useVoiceStore } from "@/stores/voiceStore";
 import { useEffect, useState } from "react";
 import { SCAN_MS, useDriverStore } from "@/stores/driverStore";
 import type { Driver } from "@/types/driver";
@@ -109,7 +110,14 @@ export function DriverPanel() {
                   </ul>
                 )}
                 <div className="mt-5 flex justify-center gap-3">
-                  <button type="button" onClick={closePanel} className="rounded-full bg-halogen px-5 py-2 text-sm font-semibold text-floor">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closePanel();
+                      void useVoiceStore.getState().start(); // MIRA goes live: greeting, then hands-free conversation
+                    }}
+                    className="rounded-full bg-halogen px-5 py-2 text-sm font-semibold text-floor"
+                  >
                     Let&apos;s go
                   </button>
                   <button type="button" onClick={() => useDriverStore.setState({ status: "idle" })} className="rounded-full border border-halogen/20 px-5 py-2 text-sm">

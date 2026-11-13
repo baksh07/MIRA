@@ -42,3 +42,27 @@ def is_speech(text: str) -> bool:
     if len(words) >= 2:
         return True
     return bool(words) and (words[0] in _SHORT_REPLIES or split_wake(words[0])[0])
+
+
+# Words that mean the driver hasn't finished their thought yet.
+_CONTINUES = {
+    "and", "but", "or", "so", "because", "like", "when", "if", "then", "with", "to", "the", "a", "my",
+    "i", "i'm", "um", "uh", "also", "maybe", "which", "that", "for", "of", "at", "in",
+}
+
+
+def turn_gap(text: str) -> float:
+    """How long to wait for more speech before answering (smart end-of-turn).
+
+    A finished sentence gets a fast answer; a thought that trails off (comma,
+    connective word, no punctuation) gets time to continue.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return 0.8
+    last = stripped.rstrip(".,!?;:").split()[-1].lower() if stripped.rstrip(".,!?;:").split() else ""
+    if stripped[-1] in ",;:-" or last in _CONTINUES:
+        return 1.8
+    if stripped[-1] in ".?!":
+        return 0.35
+    return 0.8

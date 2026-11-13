@@ -120,13 +120,13 @@ async def test_new_speech_does_not_cancel_an_answer_in_progress(monkeypatch: pyt
         actions: list = []
         memories: list = []
 
-    async def slow_converse(_vehicle_id: object, _text: str) -> Reply:
+    async def slow_converse(_vehicle_id: object, _text: str, **_kw: object) -> Reply:
         started.set()
         await asyncio.sleep(0.3)
         return Reply()
 
     monkeypatch.setattr(pipeline, "converse", slow_converse)
-    monkeypatch.setattr(pipeline, "TURN_GAP_SECONDS", 0.01)
+    monkeypatch.setattr(pipeline, "gap_for", lambda _text: 0.01)
     brain = pipeline.MiraBrain(uuid.uuid4())
     pushed: list = []
 
@@ -141,3 +141,35 @@ async def test_new_speech_does_not_cancel_an_answer_in_progress(monkeypatch: pyt
     await brain.process_frame(InterimTranscriptionFrame("and also the music", "u", "t"), down)  # talking during thinking
     await asyncio.sleep(0.5)
     assert any(isinstance(f, TTSSpeakFrame) and f.text == "On our way, Daniel." for f in pushed)
+
+
+def test_turn_gap_waits_when_the_driver_trails_off() -> None:
+    from mira_backend.voice.wake import turn_gap
+
+    assert turn_gap("Set it to 21 degrees, please.") < 0.5
+    assert turn_gap("It depends. Like, when I'm heading to office,") > 1.5
+    assert turn_gap("I prefer mostly eco and") > 1.5
+    assert 0.5 < turn_gap("play some jazz") < 1.5
+
+
+def test_working_phrase_is_personal_and_tool_specific() -> None:
+    from mira_backend.voice.pipeline import working_phrase
+
+    assert working_phrase(["set_cabin_temperature"], "Dan") == "Adjusting the temperature for you, Dan. One moment."
+    assert working_phrase(["get_vehicle_status"], None) == "Let me check the car."
+    assert working_phrase(["unknown_tool"], "Dan") == "One moment."
+
+
+def test_greeting_for_new_and_returning_drivers() -> None:
+    from datetime import datetime
+
+    from mira_backend.services.briefing import briefing_text, preferred_name
+
+    now = datetime(2026, 11, 13, 15, 0)
+    first = briefing_text("Daniel", now, None, first_drive=True)
+    assert first.startswith("Hi Daniel, I'm MIRA.")
+    assert "what should I call you?" in first
+    back = briefing_text("Dan", now, None, returning=True)
+    assert back.startswith("Good afternoon, Dan. Welcome back") and back.endswith("Just say MIRA whenever you need me.")
+    assert preferred_name("Daniel", ["Enjoys jazz.", "Prefers to be called Danny."]) == "Danny"
+    assert preferred_name("Daniel", []) == "Daniel"

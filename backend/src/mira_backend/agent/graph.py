@@ -8,8 +8,10 @@ Context is kept compact on purpose (Groq's free tier limits tokens per
 minute): a one-line car summary, the driver's preferences and recent memories.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable
 from typing import Annotated, Any, TypedDict
 
 from fastmcp import Client
@@ -114,7 +116,7 @@ async def keep_onboarding_settings(repo: DriverRepository, driver: Driver, state
         if not action["ok"] or not setting or setting[0] in saved:
             continue
         key, read = setting
-        await repo.set_preference(driver.id, key, read(state), "onboarding")  # type: ignore[arg-type]
+        await repo.set_preference(driver.id, key, read(state), "agent")  # type: ignore[arg-type]
         log.memories.append(f"Preference {key} = {read(state)}")
         saved.add(key)
 
@@ -136,11 +138,15 @@ async def run_turn(
     history: list[dict[str, str]],
     message: str,
     onboarding: bool = False,
+    on_tools: Callable[[list[str]], Awaitable[None]] | None = None,
 ) -> TurnResult:
+    """One agent turn. `on_tools` is told which tools are about to run (voice uses it to say "one moment")."""
     log = ActionLog()
     car = vehicles.get(vehicle_id)
-    prefs = await repo.get_preferences(driver.id) if driver else {}
-    memories = await repo.list_memories(driver.id, limit=8) if driver else []
+    if driver:  # both reads at once: every round trip to the database adds latency
+        prefs, memories = await asyncio.gather(repo.get_preferences(driver.id), repo.list_memories(driver.id, limit=8))
+    else:
+        prefs, memories = {}, []
 
     async with Client(mcp) as mcp_client:
         tools = await vehicle_tools(mcp_client, vehicle_id, log)
@@ -150,6 +156,8 @@ async def run_turn(
 
         async def agent(state: TurnState) -> dict[str, Any]:
             response = await chain.ainvoke(state["messages"])
+            if on_tools and isinstance(response, AIMessage) and response.tool_calls:
+                await on_tools([call["name"] for call in response.tool_calls])
             return {"messages": [response], "steps": state["steps"] + 1}
 
         def route(state: TurnState) -> str:

@@ -1,6 +1,8 @@
 """Talk to MIRA (text). The voice pipeline uses the same `converse` function."""
 
+import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID
 
@@ -32,7 +34,25 @@ class ChatResponse(BaseModel):
     model: str | None
 
 
-async def converse(vehicle_id: UUID, message: str) -> ChatResponse:
+_background: set[asyncio.Task[None]] = set()
+
+
+def _persist(add_message: Callable[[UUID, str, str], Awaitable[None]], session_id: UUID, user: str, reply: str) -> None:
+    async def write() -> None:
+        try:
+            await add_message(session_id, "user", user)
+            await add_message(session_id, "assistant", reply)
+        except Exception:  # noqa: BLE001 - history is best-effort; never break the conversation
+            logger.warning("could not save conversation history", exc_info=True)
+
+    task = asyncio.create_task(write())
+    _background.add(task)
+    task.add_done_callback(_background.discard)
+
+
+async def converse(
+    vehicle_id: UUID, message: str, on_tools: Callable[[list[str]], Awaitable[None]] | None = None
+) -> ChatResponse:
     models = chat_models(get_settings())
     if not models:
         raise HTTPException(status_code=503, detail="MIRA's language model is not configured")
@@ -47,15 +67,15 @@ async def converse(vehicle_id: UUID, message: str) -> ChatResponse:
         result = await run_turn(
             models=models, repo=services.repo, vehicle_id=str(vehicle_id),
             driver=session.driver if session else None, history=history, message=message,
-            onboarding=bool(session and session.onboarding),
+            onboarding=bool(session and session.onboarding), on_tools=on_tools,
         )
     except RuntimeError as error:
         logger.error("assistant turn failed: %s", error)
         raise HTTPException(status_code=503, detail="MIRA can't reach her language models right now") from error
 
     if session:
-        await services.repo.add_message(session.id, "user", message)
-        await services.repo.add_message(session.id, "assistant", result.reply)
+        # Saved off the reply path so the driver hears MIRA sooner; written in order.
+        _persist(services.repo.add_message, session.id, message, result.reply)
     else:
         bucket = _anonymous_history.setdefault(str(vehicle_id), [])
         bucket += [{"role": "user", "content": message}, {"role": "assistant", "content": result.reply}]
