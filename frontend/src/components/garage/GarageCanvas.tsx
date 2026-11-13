@@ -1,6 +1,6 @@
 "use client";
 
-import { useProgress } from "@react-three/drei";
+import { PerformanceMonitor, useProgress } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Suspense, useState, useSyncExternalStore } from "react";
 import { VoiceButton } from "@/components/assistant/VoiceButton";
@@ -44,16 +44,34 @@ function LoadingOverlay() {
 export default function GarageCanvas() {
   const reducedMotion = usePrefersReducedMotion();
   const [colors] = useState(readShowroomColors);
+  // Quality follows the measured frame rate: full on capable devices, lighter on slow ones.
+  const [dpr, setDpr] = useState<number | [number, number]>([1, 2]);
+  const [lowPower, setLowPower] = useState(false);
 
   return (
     <>
       <Canvas
-        dpr={[1, 2]}
+        dpr={dpr}
         camera={{ position: GARAGE_CAMERA_POSITION, fov: 32, near: 0.05, far: 60 }}
         aria-label="3D view of the car in the garage. Drag to orbit, scroll or pinch to zoom."
         role="img"
       >
-        <Showroom colors={colors} />
+        <PerformanceMonitor
+          flipflops={3}
+          onDecline={() => {
+            setDpr(1);
+            setLowPower(true);
+          }}
+          onIncline={() => {
+            setDpr([1, 2]);
+            setLowPower(false);
+          }}
+          onFallback={() => {
+            setDpr(1);
+            setLowPower(true);
+          }}
+        />
+        <Showroom colors={colors} lowPower={lowPower} />
         <Suspense fallback={null}>
           <CarModel reducedMotion={reducedMotion} />
           <CameraRig instant={reducedMotion} />
