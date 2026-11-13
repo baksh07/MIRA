@@ -4,6 +4,10 @@
 MIRA is an independent portfolio project exploring personalized,
 memory-informed automotive voice assistants.
 
+## Live demo
+
+**https://mira-assistant-taupe.vercel.app** (backend on Render's free tier: the first request after a quiet period can take ~40 s to wake up).
+
 ## Project Status
 
 Under active development.
