@@ -13,7 +13,7 @@ for now). Switch both to `main` once the user has reviewed and merged a release.
 - Build: `pip install uv==0.13.6 && uv sync --frozen --no-dev`
 - Start: `uv run --no-sync uvicorn mira_backend.main:app --host 0.0.0.0 --port $PORT`
 - Health check: `/health`
-- Env: `GROQ_API_KEY`, `GROQ_MODELS`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `DEEPGRAM_API_KEY`,
+- Env: `GROQ_API_KEY`, `GROQ_MODELS`, `OPENAI_API_KEY`, `OPENAI_MODELS` (default gpt-4.1-mini,gpt-5-mini; OpenAI is primary), `DEEPGRAM_API_KEY`,
   `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `DATABASE_URL`, `PYTHON_VERSION=3.12.8`, `FRONTEND_ORIGINS`.
   CORS also allows `https://mira*.vercel.app` (see `core/config.py`).
 - Free tier sleeps after ~15 min idle: the first request after a pause takes ~30–50 s.

@@ -51,18 +51,19 @@ from pipecat.transports.websocket.fastapi import (
 from mira_backend.api.assistant import converse
 from mira_backend.core.config import get_settings
 from mira_backend.models.vehicle import VehicleState
-from mira_backend.services.briefing import briefing
+from mira_backend.services.briefing import briefing, preferred_name
 from mira_backend.services.container import container
 from mira_backend.services.vehicle_simulator import vehicles
-from mira_backend.voice.wake import FOLLOW_UP_SECONDS, is_speech, split_wake
+from mira_backend.voice.wake import FOLLOW_UP_SECONDS, is_speech, split_wake, turn_gap
 
 logger = logging.getLogger(__name__)
 
 IN_RATE = 16_000
 OUT_RATE = 24_000
 # Deepgram may split one spoken request into several final segments; wait this
-# long after the last one before answering.
-TURN_GAP_SECONDS = 0.8
+# Deepgram may split one request into several final segments; how long to wait
+# for more depends on whether the driver sounds finished (see voice.wake.turn_gap).
+gap_for = turn_gap
 
 
 class MiraWireSerializer(FrameSerializer):
@@ -141,7 +142,7 @@ class MiraBrain(FrameProcessor):
     async def _respond_after_gap(self) -> None:
         # Only this short wait is cancellable (the driver is still talking).
         try:
-            await asyncio.sleep(TURN_GAP_SECONDS)
+            await asyncio.sleep(gap_for(" ".join(self._parts)))
         except asyncio.CancelledError:
             return
         text = " ".join(self._parts).strip()
@@ -170,8 +171,20 @@ class MiraBrain(FrameProcessor):
             return
         self._awake_until = float("inf")  # stay engaged while thinking
         await self.push_frame(event("status", status="thinking"))
+        name = session.driver.display_name if (session := container().sessions.current(self._vehicle_id)) else None
+        announced = False
+
+        async def tools_starting(tools: list[str]) -> None:
+            nonlocal announced
+            if announced:
+                return
+            announced = True
+            phrase = working_phrase(tools, name)
+            await self.push_frame(event("progress", text=phrase))
+            await self.push_frame(TTSSpeakFrame(phrase))
+
         try:
-            result = await converse(self._vehicle_id, request[:500])
+            result = await converse(self._vehicle_id, request[:500], on_tools=tools_starting)
             await self.push_frame(
                 event("assistant", text=result.reply, actions=[a["message"] for a in result.actions if a["ok"]], memories=result.memories)
             )
@@ -182,6 +195,32 @@ class MiraBrain(FrameProcessor):
             logger.warning("voice turn failed: %s", type(error).__name__)
             await self.push_frame(event("assistant", text=str(detail), actions=[], memories=[]))
             await self.push_frame(TTSSpeakFrame(str(detail)))
+
+
+# Said while tools run, so the driver hears MIRA working instead of silence.
+_WORKING = {
+    "set_cabin_temperature": "Adjusting the temperature for you, {name}. One moment.",
+    "set_seat_heating": "Getting your seat warmed up.",
+    "set_fan_speed": "Adjusting the fan.",
+    "set_ambient_lighting": "Changing the lights for you.",
+    "apply_cabin_scene": "Setting the mood in here, just a second.",
+    "set_navigation_destination": "Let me plan the route, {name}.",
+    "start_drive": "Here we go.",
+    "leave_garage": "Opening the garage door.",
+    "stop_drive": "Pulling over.",
+    "control_music": "Let me sort the music.",
+    "set_driving_mode": "Switching the drive mode.",
+    "get_vehicle_status": "Let me check the car, {name}.",
+    "remember": "Noted.",
+    "save_preference": "I'll remember that.",
+}
+
+
+def working_phrase(tools: list[str], name: str | None) -> str:
+    for tool in tools:
+        if tool in _WORKING:
+            return _WORKING[tool].format(name=name or "").replace(" ,", ",").replace(", .", ".").replace(" .", ".")
+    return "One moment."
 
 
 LOW_FUEL_PERCENT = 15
@@ -246,10 +285,12 @@ async def run_voice_session(websocket: WebSocket, vehicle_id: UUID) -> None:
     async def on_connected(_transport: object, _client: object) -> None:
         services = container()
         session = services.sessions.current(vehicle_id)
-        text = await briefing(session.driver.display_name if session else None)
-        if session and session.onboarding and not await services.repo.list_memories(session.driver.id, limit=1):
-            # Still getting to know a new driver: lead with the first onboarding question.
-            text = text.replace("Just say MIRA whenever you need me.", "Since this is our first drive, what should I call you?")
+        if session:
+            memories = [m.content for m in await services.repo.list_memories(session.driver.id, limit=20)]
+            name = preferred_name(session.driver.display_name, memories)
+            text = await briefing(name, first_drive=session.onboarding and not memories, returning=bool(memories))
+        else:
+            text = await briefing(None)
         if session:
             await services.repo.add_message(session.id, "assistant", text)
         brain.wake()

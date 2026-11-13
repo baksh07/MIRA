@@ -154,6 +154,8 @@ class InMemoryDriverRepository:
         return dict(self.preferences.get(driver_id, {}))
 
     async def set_preference(self, driver_id: UUID, key: PreferenceKey, value: Any, source: str) -> None:
+        if source not in ("seed", "agent", "user"):  # mirrors the database check constraint
+            raise ValueError(f"invalid preference source {source!r}")
         self.preferences.setdefault(driver_id, {})[key] = value
 
     async def list_memories(self, driver_id: UUID, limit: int = 20) -> list[Memory]:

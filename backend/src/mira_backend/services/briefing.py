@@ -6,6 +6,7 @@ Every external call is best-effort: without weather the briefing still works.
 """
 
 import logging
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -89,16 +90,33 @@ def greeting_word(now: datetime) -> str:
     return "Good evening"
 
 
-def briefing_text(name: str | None, now: datetime, weather: Weather | None) -> str:
+def briefing_text(
+    name: str | None, now: datetime, weather: Weather | None, *, first_drive: bool = False, returning: bool = False
+) -> str:
+    """What MIRA says when the driver gets in: a greeting, weather and traffic, then an invitation."""
     who = f", {name}" if name else ""
-    parts = [f"{greeting_word(now)}{who}."]
-    if weather:
-        parts.append(f"It's {weather.temperature_c:.0f} degrees in {CITY} with {weather.condition}, and {traffic(now)}.")
-    else:
-        parts.append(f"In {CITY} {traffic(now)}.")
-    parts.append("Just say MIRA whenever you need me.")
-    return " ".join(parts)
+    conditions = (
+        f"It's {weather.temperature_c:.0f} degrees in {CITY} with {weather.condition}, and {traffic(now)}."
+        if weather
+        else f"In {CITY} {traffic(now)}."
+    )
+    if first_drive:
+        return (
+            f"Hi{' ' + name if name else ''}, I'm MIRA. {conditions} This is our first drive together, so I'd love to get to know you "
+            "and make this car yours. First things first: what should I call you?"
+        )
+    welcome = " Welcome back, I've set the car up the way you like it." if returning else ""
+    return f"{greeting_word(now)}{who}.{welcome} {conditions} Just say MIRA whenever you need me."
 
 
-async def briefing(name: str | None) -> str:
-    return briefing_text(name, datetime.now(TIMEZONE), await current_weather())
+async def briefing(name: str | None, *, first_drive: bool = False, returning: bool = False) -> str:
+    return briefing_text(name, datetime.now(TIMEZONE), await current_weather(), first_drive=first_drive, returning=returning)
+
+
+def preferred_name(display_name: str, memories: list[str]) -> str:
+    """The name the driver asked to be called ("Prefers to be called Dan."), else their profile name."""
+    for memory in memories:
+        match = re.search(r"called ([A-Z][\w'-]*)", memory)
+        if match:
+            return match.group(1)
+    return display_name
