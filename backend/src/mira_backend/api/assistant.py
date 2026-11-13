@@ -47,6 +47,7 @@ async def converse(vehicle_id: UUID, message: str) -> ChatResponse:
         result = await run_turn(
             models=models, repo=services.repo, vehicle_id=str(vehicle_id),
             driver=session.driver if session else None, history=history, message=message,
+            onboarding=bool(session and session.onboarding),
         )
     except RuntimeError as error:
         logger.error("assistant turn failed: %s", error)

@@ -108,3 +108,25 @@ async def test_arrival_is_remembered_as_an_episodic_memory_for_that_driver() -> 
     memories = client.get(f"/api/sessions/{vid}/profile").json()["memories"]
     assert any(m["content"].startswith("Drove to Lake Starnberg") and m["category"] == "episodic" for m in memories)
     await container().sessions.record_arrival(str(uuid.uuid4()), "Nowhere")  # no driver: nothing stored
+
+
+@pytest.mark.anyio
+async def test_new_driver_gets_onboarding_and_returning_driver_does_not() -> None:
+    import uuid as _uuid
+
+    from mira_backend.services.driver_repository import InMemoryDriverRepository
+    from mira_backend.services.sessions import SessionService
+
+    repo = InMemoryDriverRepository()
+    daniel = next(d for d in repo.drivers.values() if d.slug == "daniel")
+    for memory in await repo.list_memories(daniel.id):
+        await repo.delete_memory(daniel.id, memory.id)
+    service = SessionService(repo)
+    car = _uuid.uuid4()
+    first = await service.identify(car, daniel.id)
+    assert "what should I call you" in first.greeting and service.current(car).onboarding
+    assert (await repo.recent_messages(first.session_id))[-1]["content"] == first.greeting
+
+    await repo.add_memory(daniel.id, "profile", "Prefers to be called Dan.")
+    second = await service.identify(_uuid.uuid4(), daniel.id)
+    assert second.greeting.startswith("Welcome back")
