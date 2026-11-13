@@ -53,7 +53,7 @@ export function DemoGuide() {
   };
 
   const hint = next ? (
-    <p className={`pointer-events-none fixed inset-x-0 top-6 z-10 mx-auto w-fit max-w-[70vw] ${seated ? "" : "md:hidden"}`}>
+    <p className={`pointer-events-none fixed inset-x-0 z-10 mx-auto w-fit max-w-[85vw] ${seated ? "top-[7.5rem]" : "top-[4.5rem] md:hidden"}`}>
       <span className="block rounded-full border border-halogen/10 bg-floor/60 px-4 py-1.5 text-xs backdrop-blur-md">
         <span className="text-ambient">Next:</span> {next.label}
       </span>
