@@ -105,7 +105,8 @@ export const useAssistantStore = create<AssistantStore>()((set, get) => ({
       return result;
     } catch (error) {
       const reason = error instanceof Error ? error.message : "MIRA is unavailable";
-      get().addTurn({ role: "assistant", text: `Sorry, I couldn't reach the car's assistant (${reason}).` });
+      const text = reason.startsWith("You're talking a lot") ? reason : `Sorry, I couldn't reach the car's assistant (${reason}).`;
+      get().addTurn({ role: "assistant", text });
       set({ status: "error", error: reason });
       return null;
     }

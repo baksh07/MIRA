@@ -232,3 +232,27 @@ async def test_scene_changes_everything_in_one_confirmed_update() -> None:
     state = (await car.apply(ApplyScene(scene="sport"))).state
     assert state.driving_mode == "sport_plus" and state.ambient_lighting.color == "#FF2D2D" and state.music.playing
     assert state.version == 1 and state.scene == "sport"
+
+
+
+# --- Rate limits ----------------------------------------------------------------
+
+from mira_backend.core.limits import ConcurrencyLimit, RateLimit  # noqa: E402
+from fastapi import HTTPException  # noqa: E402
+
+
+def test_rate_limit_allows_up_to_the_limit_per_visitor() -> None:
+    limit = RateLimit(per_minute=3)
+    for _ in range(3):
+        limit.check("1.2.3.4")
+    with pytest.raises(HTTPException) as error:
+        limit.check("1.2.3.4")
+    assert error.value.status_code == 429
+    limit.check("5.6.7.8")  # other visitors are unaffected
+
+
+def test_concurrency_limit_releases_slots() -> None:
+    limit = ConcurrencyLimit(per_key=1)
+    assert limit.acquire("a") and not limit.acquire("a")
+    limit.release("a")
+    assert limit.acquire("a")

@@ -4,12 +4,13 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from mira_backend.agent.graph import run_turn
 from mira_backend.agent.llm import chat_models
 from mira_backend.core.config import get_settings
+from mira_backend.core.limits import chat_limit, client_ip
 from mira_backend.services.container import container
 
 logger = logging.getLogger(__name__)
@@ -63,5 +64,6 @@ async def converse(vehicle_id: UUID, message: str) -> ChatResponse:
 
 
 @router.post("/api/assistant/chat", response_model=ChatResponse)
-async def chat(body: ChatRequest) -> ChatResponse:
+async def chat(body: ChatRequest, request: Request) -> ChatResponse:
+    chat_limit.check(client_ip(request))
     return await converse(body.vehicle_id, body.message.strip())
