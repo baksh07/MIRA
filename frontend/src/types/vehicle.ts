@@ -19,6 +19,7 @@ export interface VehicleState {
   trip: { active: boolean; speed_kmh: number; remaining_km: number | null; total_km: number | null; arrived_at: string | null };
   scene: string | null;
   paint_color: string;
+  in_garage: boolean;
   version: number;
 }
 
@@ -36,6 +37,7 @@ export type VehicleCommand =
   | { type: "set_paint"; color: string }
   | { type: "start_trip" }
   | { type: "stop_trip" }
+  | { type: "leave_garage" }
   | { type: "refuel" }
   | { type: "apply_scene"; scene: SceneName };
 

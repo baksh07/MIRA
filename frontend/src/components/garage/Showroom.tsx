@@ -1,9 +1,10 @@
 "use client";
 
-import { ContactShadows, Environment, Lightformer, MeshReflectorMaterial } from "@react-three/drei";
+import { ContactShadows, Environment, Lightformer } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import type { SpotLight } from "three";
+import { insideGarage, pose } from "@/lib/drive";
 
 export interface ShowroomColors {
   wall: string;
@@ -11,14 +12,13 @@ export interface ShowroomColors {
 }
 
 /**
- * The studio around the car: a polished floor that fades into the back wall,
- * softbox reflections for the paint, and the overhead spotlight.
+ * Studio lighting around the car: softbox reflections for the paint and a
+ * little ambient light. The floor, walls and fog live in the world
+ * (`components/world`), which moves around the car as it drives.
  */
-export function Showroom({ colors, lowPower = false }: { colors: ShowroomColors; lowPower?: boolean }) {
+export function Showroom() {
   return (
     <>
-      <color attach="background" args={[colors.wall]} />
-      <fog attach="fog" args={[colors.wall, 9, 24]} />
 
       {/* Softboxes baked into the reflections; they are never seen directly. */}
       <Environment resolution={256} frames={1}>
@@ -29,23 +29,6 @@ export function Showroom({ colors, lowPower = false }: { colors: ShowroomColors;
       </Environment>
       <ambientLight intensity={0.15} />
 
-      <mesh rotation-x={-Math.PI / 2}>
-        <planeGeometry args={[60, 60]} />
-        <MeshReflectorMaterial
-          color={colors.floor}
-          // Re-created at a lower resolution when the device struggles.
-          key={lowPower ? "low" : "high"}
-          resolution={lowPower ? 256 : 1024}
-          blur={lowPower ? [200, 60] : [400, 120]}
-          mixBlur={1}
-          mixStrength={12}
-          depthScale={1.1}
-          minDepthThreshold={0.4}
-          maxDepthThreshold={1.4}
-          roughness={0.9}
-          metalness={0.5}
-        />
-      </mesh>
     </>
   );
 }
@@ -84,15 +67,19 @@ function switchOnLevel(elapsed: number): number {
 export function Spotlight({ animate }: { animate: boolean }) {
   const light = useRef<SpotLight>(null);
   const startedAt = useRef<number | null>(null);
+  const level = useRef(1);
 
   useFrame((state) => {
     if (!light.current) return;
+    // The spotlight hangs in the garage: it fades out once the car has left.
+    const here = insideGarage(pose) ? 1 : 0;
+    level.current += (here - level.current) * 0.05;
     if (!animate) {
-      light.current.intensity = SPOT_INTENSITY;
+      light.current.intensity = SPOT_INTENSITY * level.current;
       return;
     }
     startedAt.current ??= state.clock.elapsedTime;
-    light.current.intensity = SPOT_INTENSITY * switchOnLevel(state.clock.elapsedTime - startedAt.current);
+    light.current.intensity = SPOT_INTENSITY * level.current * switchOnLevel(state.clock.elapsedTime - startedAt.current);
   });
 
   return <spotLight ref={light} position={[0, 7, 0]} angle={0.55} penumbra={1} intensity={0} decay={2} />;

@@ -28,6 +28,7 @@ export function DemoGuide() {
   const view = useGarageStore((s) => s.view);
   const doorOpen = useVehicleStore((s) => s.state?.doors.left_open ?? false);
   const tripStarted = useVehicleStore((s) => Boolean(s.state?.trip.active || s.state?.trip.arrived_at));
+  const leftGarage = useVehicleStore((s) => s.state?.in_garage === false);
   const driver = useDriverStore((s) => s.current);
   const talked = useAssistantStore((s) => s.turns.some((t) => t.role === "user"));
   const seated = view === "cockpit";
@@ -37,7 +38,7 @@ export function DemoGuide() {
     { label: "Get in", done: seated || Boolean(driver) },
     { label: "Let MIRA recognise you", done: Boolean(driver) },
     { label: "Talk to MIRA: try “I'm cold” or press the mic", done: talked },
-    { label: "Say “Take me to the airport, let's go”", done: tripStarted },
+    { label: "Say “MIRA, take me to the airport, let's roll” or drive with W A S D", done: tripStarted || leftGarage },
   ];
   const next = steps.find((s) => !s.done);
 

@@ -8,6 +8,8 @@ import { CockpitHud } from "@/components/cockpit/CockpitHud";
 import { CameraRig, GARAGE_CAMERA_POSITION, GarageControls } from "./CameraRig";
 import { CarModel } from "./CarModel";
 import { GarageMessage } from "./GarageMessage";
+import { Atmosphere, GarageRoom, WorldFrame } from "@/components/world/World";
+import { Minimap } from "@/components/world/Minimap";
 import { CarShadow, Showroom, type ShowroomColors, Spotlight } from "./Showroom";
 
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
@@ -52,7 +54,7 @@ export default function GarageCanvas() {
     <>
       <Canvas
         dpr={dpr}
-        camera={{ position: GARAGE_CAMERA_POSITION, fov: 32, near: 0.05, far: 60 }}
+        camera={{ position: GARAGE_CAMERA_POSITION, fov: 32, near: 0.05, far: 700 }}
         aria-label="3D view of the car in the garage. Drag to orbit, scroll or pinch to zoom."
         role="img"
       >
@@ -71,7 +73,11 @@ export default function GarageCanvas() {
             setLowPower(true);
           }}
         />
-        <Showroom colors={colors} lowPower={lowPower} />
+        <Showroom />
+        <Atmosphere wall={colors.wall} />
+        <WorldFrame>
+          <GarageRoom floor={colors.floor} lowPower={lowPower} />
+        </WorldFrame>
         <Suspense fallback={null}>
           <CarModel reducedMotion={reducedMotion} />
           <CameraRig instant={reducedMotion} />
@@ -81,6 +87,7 @@ export default function GarageCanvas() {
         <GarageControls instant={reducedMotion} />
       </Canvas>
       <LoadingOverlay />
+      <Minimap />
       <CockpitHud voice={<VoiceButton />} />
     </>
   );

@@ -16,6 +16,7 @@ from mira_backend.models.vehicle import (
     SetPaint,
     Refuel,
     SceneName,
+    LeaveGarage,
     StartTrip,
     StopTrip,
     ClearDestination,
@@ -132,6 +133,12 @@ async def set_door(vehicle_id: VehicleId, door: Literal["left", "right"], open: 
 async def start_drive(vehicle_id: VehicleId) -> dict:
     """Start driving to the current navigation destination (a destination must be set; doors closed)."""
     return await _apply(vehicle_id, StartTrip())
+
+
+@mcp.tool
+async def leave_garage(vehicle_id: VehicleId) -> dict:
+    """Open the garage door and roll out onto the street ("let's roll", "let's go" when no destination is set)."""
+    return await _apply(vehicle_id, LeaveGarage())
 
 
 @mcp.tool

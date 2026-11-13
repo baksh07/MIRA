@@ -15,6 +15,7 @@ const base: VehicleState = {
   trip: { active: false, speed_kmh: 0, remaining_km: null, total_km: null, arrived_at: null },
   scene: null,
   paint_color: "#D90012",
+  in_garage: true,
   version: 0,
 };
 const withTemp = (t: number): VehicleState => ({ ...base, climate: { ...base.climate, temperature_c: t } });

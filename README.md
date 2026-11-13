@@ -12,16 +12,18 @@ they get in.
 
 1. Drag to walk around the car, click the blue dot on the driver's door, then **Get in**.
 2. Pick **Daniel** or **Sophia** — MIRA "recognises" them and sets the car up their way.
-3. Press the mic (or type) and say: *"I'm freezing and tired. Take me to Munich Airport, let's go."*
-   MIRA applies a cozy cabin scene, plans the route and drives: watch the speed, ETA and fuel, and listen for her arrival announcement.
-4. Say *"I always like it at 21 degrees"* — then switch drivers and back: the car remembers.
-5. Open **Memories** in the assistant panel to see (and delete) what MIRA knows about you.
+3. Press the mic once: MIRA greets you with the weather and traffic. Then talk to her by name:
+   *"MIRA, it's getting cold"* — she checks the cabin, compares with your usual and asks before changing anything.
+4. *"MIRA, take me to Munich Airport, let's roll."* The garage door opens and the car drives itself through the
+   city along the route on the map. Press **W A S D** (or the arrow keys) at any time to take the wheel.
+5. Say *"I always like it at 21 degrees"* — then switch drivers and back: the car remembers.
+6. Open **Memories** in the assistant panel to see (and delete) what MIRA knows about you.
 
 ## What it does
 
 | | |
 |---|---|
-| **3D showroom** | React Three Fiber scene: reflective studio floor, opening doors on computed hinges, cinematic intro, live wrap colours, wheels and road that move while driving, adaptive quality on slow devices. |
+| **3D world** | React Three Fiber: a garage with a roll-up door opening onto a stylised night city (instanced buildings, trees, street lights, traffic). The car drives itself along road routes (following the simulator's trip progress) or with W A S D; minimap navigation; opening doors, cinematic intro, live wrap colours, adaptive quality. |
 | **Vehicle simulator** | The single authority over car state (climate, seat heating, ambient light, drive mode, music, navigation, drives with speed/fuel/ETA, windows, doors, paint). Every change is validated and confirmed; the UI never claims success early. One simulated car per browser session. |
 | **MCP tools** | The simulator is exposed as a FastMCP server (`/mcp`); the agent drives the car only through these tools. |
 | **Agent** | LangGraph loop over Groq models (automatic fallback through several models, then OpenAI). Picks tools, applies cabin scenes from moods ("I'm exhausted" → relax), and lets explicit requests beat remembered preferences. |

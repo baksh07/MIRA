@@ -1,13 +1,20 @@
 "use client";
 
+import { useDriveHud } from "@/lib/drive";
 import { useVehicleStore } from "@/stores/vehicleStore";
 
 const MODE_LABEL = { eco: "ECO", comfort: "COMFORT", sport: "SPORT", sport_plus: "SPORT+" } as const;
 
-/** MIRA's own instrument cluster. Every value comes from the confirmed vehicle state. */
+/**
+ * MIRA's own instrument cluster. Values come from the confirmed vehicle state,
+ * except speed and gear while the driver steers with the keyboard.
+ */
 export function InstrumentCluster() {
   const state = useVehicleStore((s) => s.state);
   const connection = useVehicleStore((s) => s.connection);
+  const manual = useDriveHud((s) => s.mode === "manual");
+  const manualSpeed = useDriveHud((s) => s.speedKmh);
+  const reversing = useDriveHud((s) => s.reversing);
   if (!state) {
     return (
       <div className="border border-halogen/10 bg-floor/60 backdrop-blur-md backdrop-saturate-150 rounded-3xl px-6 py-4 text-sm text-brushed">
@@ -19,8 +26,10 @@ export function InstrumentCluster() {
   return (
     <div className="border border-halogen/10 bg-floor/60 backdrop-blur-md backdrop-saturate-150 flex items-center gap-6 rounded-3xl px-6 py-4" aria-label="Instrument cluster">
       <div className="text-center">
-        <p className="text-4xl font-black tabular-nums [font-stretch:115%]">{Math.round(state.trip.speed_kmh)}</p>
-        <p className="text-[10px] tracking-widest text-brushed">KM/H · {state.trip.active ? "D" : "P"}</p>
+        <p className="text-4xl font-black tabular-nums [font-stretch:115%]">{manual ? manualSpeed : Math.round(state.trip.speed_kmh)}</p>
+        <p className="text-[10px] tracking-widest text-brushed">
+          KM/H · {state.trip.active ? "AUTO" : manual ? (reversing ? "R" : manualSpeed > 0 ? "D" : "N") : "P"}
+        </p>
       </div>
       <div className="h-12 w-px bg-halogen/10" />
       <div>
