@@ -16,6 +16,9 @@ export interface GarageState {
   /** The visitor has taken control (dragged, or reached for a hotspot); the turntable stops. */
   interacted: boolean;
   markInteracted: () => void;
+  /** The opening camera shot is playing (controls are released while it runs). */
+  intro: boolean;
+  endIntro: () => void;
   /** Start the move into the driver's seat. */
   enterCockpit: () => void;
   /** Start the move back out to the garage view. */
@@ -30,6 +33,9 @@ export const DRIVER_SIDE: DoorSide = "left";
 export const useGarageStore = create<GarageState>()((set, get) => ({
   view: "exterior",
   interacted: false,
+  intro: true,
+
+  endIntro: () => set({ intro: false }),
 
   markInteracted: () => set((state) => (state.interacted ? state : { interacted: true })),
 
