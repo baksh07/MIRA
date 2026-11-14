@@ -1,11 +1,10 @@
-﻿# MIRA — Memory-Informed Road Assistant
+# MIRA — Memory-Informed Road Assistant
 
 > A context-aware, voice-first in-car assistant that **gets to know each driver** and turns vehicle
 > signals, conversation and history into personalised behaviour — built as an end-to-end reference
 > architecture for agentic, memory-driven automotive AI.
 
-**Live demo:** **https://mira-assistant-taupe.vercel.app**
-<sub>The backend runs on a free tier: after a quiet period the first request can take ~40 s to wake up.</sub>
+**Demo video:** _add link_
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black) ![React Three Fiber](https://img.shields.io/badge/R3F-9-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Python_3.12-009688) ![LangGraph](https://img.shields.io/badge/LangGraph-agent-purple)
@@ -17,7 +16,7 @@
 ## Table of contents
 
 1. [Why MIRA](#1-why-mira)
-2. [Try it in 60 seconds](#2-try-it-in-60-seconds)
+2. [Demo walkthrough](#2-demo-walkthrough)
 3. [System architecture](#3-system-architecture)
 4. [A voice turn, end to end](#4-a-voice-turn-end-to-end)
 5. [Context engineering & memory](#5-context-engineering--memory)
@@ -51,7 +50,7 @@ does not, and nothing is learned between drives. MIRA explores the opposite desi
 Since there is no physical vehicle, the car — its climate, seats, lighting, drive modes, music,
 navigation, fuel and doors — is simulated behind the same MCP interface a real vehicle gateway would expose.
 
-## 2. Try it in 60 seconds
+## 2. Demo walkthrough
 
 1. Drag to walk around the car, click the dot on the driver's door, then **Get in**.
 2. Pick **Daniel** or **Sophia** — MIRA "recognises" the driver (simulated) and sets the car up their way.
@@ -213,7 +212,7 @@ flowchart LR
 - **Temporary is not a preference.** *"for now"*, *"today"*, *"this trip"* change the car only.
 - **Habits are proposed, not assumed.** Repeating the same setting makes MIRA *ask* to remember it.
 - **No invention.** The agent may only mention names, preferences and memories that are in its context.
-- **No sensitive data.** The policy refuses health, financial and similar categories.
+- **No sensitive data.** The policy refuses credentials and identifiers (passwords, PINs, card numbers, IBANs, social security numbers) and stores only stable facts the driver stated, never small talk or one-off requests.
 - **Server-side onboarding state.** Getting-to-know-you progress lives in the session record, not in
   chat history, so questions are never repeated and the driver can stop at any time.
 
@@ -422,6 +421,8 @@ Configuration is environment-based; see [`docs/development/deployment.md`](docs/
   by Black Snow, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
   Modified for MIRA: manufacturer badges and interior logos removed, hidden drivetrain parts dropped,
   geometry and textures compressed (`frontend/scripts/build-car-model.mjs`).
+
+**Author:** Allabakash Ghodesawar · [GitHub](https://github.com/baksh07) · [LinkedIn](https://www.linkedin.com/in/allabakash-g)
 
 MIRA is an independent portfolio project. It is not affiliated with, endorsed by, or officially
 associated with BMW. All vehicle signals and interactions are simulated.
