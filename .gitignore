@@ -1,0 +1,25 @@
+# Environment / secrets (keep placeholder templates)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+
+# Browser-test artifacts (Playwright MCP screenshots, logs)
+.playwright-mcp/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
